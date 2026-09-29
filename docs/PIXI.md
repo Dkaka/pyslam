@@ -88,7 +88,7 @@ pixi run pip install opencv-python
 Then manually edit pixi.toml to reflect pip-installed packages:
 
 ```toml
-[tool.pixi.pip-dependencies]
+[pypi-dependencies]
 opencv-python = "*"
 ```
 

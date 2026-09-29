@@ -123,11 +123,11 @@ console_bridge = "*"
 tinyxml2 = "*"
 configargparse = "*"
 python-devtools = ">=0.12.2,<0.13"
+imgviz = "==1.2.6"  # conda-forge: PyPI only has an sdist, which cannot be built when solving for linux-64 from another platform
 
-[tool.pixi.pip-dependencies]
+[pypi-dependencies]
 numba = "*"
 onnxruntime = "*"
-imgviz = "==1.2.6"
 glfw = "*"
 roma = "*"
 pyqt5 = "*"
