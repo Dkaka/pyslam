@@ -335,13 +335,25 @@ message(STATUS "G2O_LIBRARIES: ${G2O_LIBRARIES}")
 
 
 # gtsam 
+# Only accept the local GTSAM built by scripts/install_gtsam.sh. Without NO_DEFAULT_PATH,
+# CMake silently falls back to system copies (e.g. /usr/local, /opt/homebrew, $CONDA_PREFIX).
+# GTSAM_DIR and GTSAM_INCLUDE_DIR are cache entries, so clear them in case a previous
+# configure resolved them to a system copy.
 set(GTSAM_ROOT "${PYSLAM_ROOT}/thirdparty/gtsam_local")
-set(CMAKE_PREFIX_PATH ${GTSAM_ROOT}/install/lib/cmake/GTSAM/)
-set(GTSAM_DIR ${GTSAM_ROOT}/install/)
+set(GTSAM_CONFIG_DIR "${GTSAM_ROOT}/install/lib/cmake/GTSAM")
 set(GTSAM_LIB_DIR ${GTSAM_ROOT}/install/lib)
-message(STATUS "set custom gtsam folder: ${GTSAM_DIR}")
-find_package(GTSAM REQUIRED)
+unset(GTSAM_DIR CACHE)
+unset(GTSAM_INCLUDE_DIR CACHE)
+find_package(GTSAM CONFIG PATHS "${GTSAM_CONFIG_DIR}" NO_DEFAULT_PATH)
+if(NOT GTSAM_FOUND)
+  message(FATAL_ERROR "Local GTSAM not found in ${GTSAM_CONFIG_DIR}. Run scripts/install_gtsam.sh first.")
+endif()
+message(STATUS "gtsam config: ${GTSAM_DIR} (version ${GTSAM_VERSION})")
 message(STATUS "gtsam include: ${GTSAM_INCLUDE_DIR}")
+# Imported targets pass their include dirs as -isystem, which cancels a -I for the same dir, and
+# Apple clang searches /usr/local/include before -isystem dirs. So a GTSAM in /usr/local would
+# shadow the local headers. Keep the local GTSAM include dir a regular -I (CMake >= 3.25).
+set_property(TARGET gtsam PROPERTY SYSTEM FALSE)
 
 #gtsam factors
 set(GTSAM_FACTORS_ROOT "${PYSLAM_ROOT}/thirdparty/gtsam_factors")
@@ -355,8 +367,9 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${EIGEN3_INCLUDE_DIR})
 include_directories(${G2O_INCLUDE_DIRS})
 include_directories(${TBB_INCLUDE_DIRS})
-include_directories(${GTSAM_INCLUDE_DIR})
-include_directories(${GTSAM_FACTORS_INCLUDE_DIRS})
+# Prepend the local GTSAM headers so that earlier include dirs (e.g. /usr/local/include
+# pulled in via Python, pybind11, OpenCV or TBB) cannot shadow them with a different GTSAM version.
+include_directories(BEFORE ${GTSAM_INCLUDE_DIR} ${GTSAM_FACTORS_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 
 set(CPP_CORE_LINK_LIBRARIES

@@ -49,11 +49,24 @@ else()
 endif()
 
 # gtsam
-set(CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/../gtsam_local/install/lib/cmake/GTSAM/)
-set(GTSAM_DIR ${PROJECT_SOURCE_DIR}/../gtsam_local/install/)
-message(STATUS "set custom gtsam folder: ${GTSAM_DIR}")
-find_package(GTSAM REQUIRED)
+# Only accept the local GTSAM built by scripts/install_gtsam.sh. Without NO_DEFAULT_PATH,
+# CMake silently falls back to system copies (e.g. /usr/local, /opt/homebrew, $CONDA_PREFIX).
+# GTSAM_DIR and GTSAM_INCLUDE_DIR are cache entries, so clear them in case a previous
+# configure resolved them to a system copy.
+get_filename_component(GTSAM_LOCAL_ROOT "${PROJECT_SOURCE_DIR}/../gtsam_local" ABSOLUTE)
+set(GTSAM_CONFIG_DIR "${GTSAM_LOCAL_ROOT}/install/lib/cmake/GTSAM")
+unset(GTSAM_DIR CACHE)
+unset(GTSAM_INCLUDE_DIR CACHE)
+find_package(GTSAM CONFIG PATHS "${GTSAM_CONFIG_DIR}" NO_DEFAULT_PATH)
+if(NOT GTSAM_FOUND)
+  message(FATAL_ERROR "Local GTSAM not found in ${GTSAM_CONFIG_DIR}. Run scripts/install_gtsam.sh first.")
+endif()
+message(STATUS "gtsam config: ${GTSAM_DIR} (version ${GTSAM_VERSION})")
 message(STATUS "gtsam include: ${GTSAM_INCLUDE_DIR}")
+# Imported targets pass their include dirs as -isystem, which cancels a -I for the same dir, and
+# Apple clang searches /usr/local/include before -isystem dirs. So a GTSAM in /usr/local would
+# shadow the local headers. Keep the local GTSAM include dir a regular -I (CMake >= 3.25).
+set_property(TARGET gtsam PROPERTY SYSTEM FALSE)
 message(STATUS "gtsam lib dirs: ${GTSAM_LIBRARY_DIRS}")
 message(STATUS "gtsam libs: ${GTSAM_LIBS}")
 
@@ -84,10 +97,12 @@ if(WITH_PYTHON_INTERP_CHECK)
   #message(STATUS "PythonLibs: ${PythonLibs}")
 endif()
 
+# Put the local GTSAM headers first so that other include dirs (e.g. /usr/local/include
+# pulled in via Python, Eigen, Boost or TBB) cannot shadow them with a different GTSAM version.
+include_directories(BEFORE ${GTSAM_INCLUDE_DIR})
 include_directories(
     ${PYTHON_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
-    ${GTSAM_INCLUDE_DIR}
     ${Boost_INCLUDE_DIRS}
     ${TBB_INCLUDE_DIRS}
 )
