@@ -26,7 +26,10 @@ thirdparty/opencv-python
 thirdparty/opencv
 thirdparty/open3d
 thirdparty/gtsam
+thirdparty/gtsam_local
 thirdparty/gtsam_factors/lib
+thirdparty/gtsam_factors/build
+thirdparty/gtsam_factors/include
 thirdparty/contextdesc/pretrained 
 thirdparty/pydbow3/ORBvoc.txt
 thirdparty/protoc 

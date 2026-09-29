@@ -106,6 +106,17 @@ echo "Using PYTHON_EXE: $PYTHON_EXE"
 
 PYTHON_VERSION=$($PYTHON_EXE -c "import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")")
 
+# GTSAM tag to build. thirdparty/gtsam.patch, thirdparty/gtsam_factors and the C++ core
+# (optimizer_gtsam.cpp) are written against this version, so they must be updated together.
+GTSAM_TAG="4.2a9"
+
+# The nproc alias in bash_utils.sh is not expanded in non-interactive scripts.
+if [[ "$OSTYPE" == darwin* ]]; then
+    NUM_CORES=$(sysctl -n hw.logicalcpu)
+else
+    NUM_CORES=$(nproc)
+fi
+
 
 WITH_MARCH_NATIVE=ON
 if [[ "$OSTYPE" == darwin* ]]; then
@@ -121,20 +132,25 @@ ensure_python_package "$PYTHON_EXE" "pyparsing>=2.4.6" pyparsing || exit 1
 
 cd thirdparty
 if [ ! -d gtsam_local ]; then
-	git clone https://github.com/borglab/gtsam.git gtsam_local
-    #git fetch --all --tags # to fetch tags 
-    cd gtsam_local
-    git checkout tags/4.2a9   
-    git apply ../gtsam.patch
-    cd .. 
+    # Remove a partial checkout on failure, so that the next run starts from scratch
+    # instead of silently building an unpatched or wrong version.
+    # Shallow clone of just the tag: the full history is large and slow to fetch.
+    if ! ( git clone --depth 1 --branch $GTSAM_TAG https://github.com/borglab/gtsam.git gtsam_local && \
+           cd gtsam_local && \
+           git apply ../gtsam.patch ); then
+        print_red "Error: failed to fetch GTSAM $GTSAM_TAG or apply thirdparty/gtsam.patch"
+        rm -rf gtsam_local
+        exit 1
+    fi
 fi
 cd gtsam_local
 make_buid_dir
+GTSAM_CONFIG_FILE="install/lib/cmake/GTSAM/GTSAMConfig.cmake"
 TARGET_GTSAM_LIB="install/lib/libgtsam.so"
-if [[ "$OSTYPE" == darwin* ]]; then 
+if [[ "$OSTYPE" == darwin* ]]; then
     TARGET_GTSAM_LIB="install/lib/libgtsam.dylib"
 fi
-if [[ ! -f "$TARGET_GTSAM_LIB" ]]; then
+if [[ ! -f "$TARGET_GTSAM_LIB" || ! -f "$GTSAM_CONFIG_FILE" ]]; then
 	cd build
     # NOTE: gtsam has some issues when compiling with march=native option!
     # https://groups.google.com/g/gtsam-users/c/jdySXchYVQg
@@ -144,17 +160,31 @@ if [[ ! -f "$TARGET_GTSAM_LIB" ]]; then
         # Ubuntu 24.04 requires CMake 3.22 or higher
         GTSAM_OPTIONS+=" -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
     fi
-    GTSAM_OPTIONS+=" -DGTSAM_THROW_CHEIRALITY_EXCEPTION=OFF -DCMAKE_PYTHON_EXECUTABLE=$PYTHON_EXE -DGTSAM_PYTHON_VERSION=$PYTHON_VERSION"
+    # Pin the interpreter: with GTSAM_PYTHON_VERSION set, GTSAM skips its own Python lookup and
+    # the wrapper (pybind11) uses PYTHON_EXECUTABLE, which is also what `make python-install` runs.
+    GTSAM_OPTIONS+=" -DGTSAM_THROW_CHEIRALITY_EXCEPTION=OFF -DGTSAM_PYTHON_VERSION=$PYTHON_VERSION"
+    GTSAM_OPTIONS+=" -DPYTHON_EXECUTABLE=$PYTHON_EXE -DPython_EXECUTABLE=$PYTHON_EXE -DPython3_EXECUTABLE=$PYTHON_EXE"
     if [[ "$OSTYPE" == darwin* ]]; then
         GTSAM_OPTIONS+=" -DGTSAM_WITH_TBB=OFF"
-    fi 
+    fi
     echo GTSAM_OPTIONS: $GTSAM_OPTIONS
-    cmake .. -DCMAKE_INSTALL_PREFIX="`pwd`/../install" -DCMAKE_BUILD_TYPE=Release $GTSAM_OPTIONS $EXTERNAL_OPTIONS $MAC_OPTIONS
-	make -j $(nproc)
-    make install 
+    cmake .. -DCMAKE_INSTALL_PREFIX="`pwd`/../install" -DCMAKE_BUILD_TYPE=Release $GTSAM_OPTIONS $EXTERNAL_OPTIONS $MAC_OPTIONS || { print_red "Error: GTSAM cmake configure failed"; exit 1; }
+	make -j $NUM_CORES || { print_red "Error: GTSAM build failed"; exit 1; }
+    make install || { print_red "Error: GTSAM install failed"; exit 1; }
+    cd ..
+fi
 
-    # Now install gtsam python package
-    make python-install 
+# Install the gtsam python package into $PYTHON_EXE unless it already has this version.
+# This runs even when the C++ library is already built, so that a recreated python
+# environment gets the package back. A different gtsam (e.g. a pip wheel) is replaced.
+INSTALLED_GTSAM_PY_VERSION=$($PYTHON_EXE -c "import gtsam, importlib.metadata as m; print(m.version('gtsam'))" 2>/dev/null)
+if [[ "$INSTALLED_GTSAM_PY_VERSION" != "$GTSAM_TAG" ]]; then
+    echo "Installing gtsam python package (found: '${INSTALLED_GTSAM_PY_VERSION:-none}', expected: $GTSAM_TAG)"
+    ( cd build && make python-install ) || { print_red "Error: GTSAM python install failed"; exit 1; }
+fi
+if ! $PYTHON_EXE -c "import gtsam" ; then
+    print_red "Error: 'import gtsam' fails with $PYTHON_EXE"
+    exit 1
 fi
 
 echo current folder: $(pwd)
@@ -167,7 +197,7 @@ print_blue '================================================'
 
 cd thirdparty
 cd gtsam_factors
-./build.sh $EXTERNAL_OPTIONS -DWITH_MARCH_NATIVE=$WITH_MARCH_NATIVE
+./build.sh $EXTERNAL_OPTIONS -DWITH_MARCH_NATIVE=$WITH_MARCH_NATIVE || { print_red "Error: gtsam_factors build failed"; exit 1; }
 
 cd "$ROOT_DIR"
 

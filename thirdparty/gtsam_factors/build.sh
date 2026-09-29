@@ -2,6 +2,7 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd ) # get script dir (this should be the main folder directory of PLVS)
 SCRIPT_DIR=$(readlink -f $SCRIPT_DIR)  # this reads the actual path if a symbolic directory is used
+SCRIPTS_DIR="$SCRIPT_DIR/../../scripts"
 
 function make_dir(){
 if [ ! -d $1 ]; then
@@ -52,8 +53,8 @@ echo "EXTERNAL_OPTIONS: $EXTERNAL_OPTIONS"
 
 make_dir build
 cd build
-cmake .. $EXTERNAL_OPTIONS
-make -j 4
+cmake .. $EXTERNAL_OPTIONS || exit 1
+make -j 4 || exit 1
 
 cd ..
 
