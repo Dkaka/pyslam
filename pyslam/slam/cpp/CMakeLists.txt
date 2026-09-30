@@ -238,8 +238,6 @@ endif()
 message(STATUS "TBB include: ${TBB_INCLUDE_DIRS}")
 message(STATUS "TBB link libs: ${TBB_LINK_LIBS}")
 
-# boost 
-find_package(Boost REQUIRED COMPONENTS thread filesystem)
 
 
 include_directories(${PYSLAM_SLAM_SRC})
@@ -370,7 +368,6 @@ include_directories(${TBB_INCLUDE_DIRS})
 # Prepend the local GTSAM headers so that earlier include dirs (e.g. /usr/local/include
 # pulled in via Python, pybind11, OpenCV or TBB) cannot shadow them with a different GTSAM version.
 include_directories(BEFORE ${GTSAM_INCLUDE_DIR} ${GTSAM_FACTORS_INCLUDE_DIRS})
-include_directories(${Boost_INCLUDE_DIRS})
 
 set(CPP_CORE_LINK_LIBRARIES
     ${OpenCV_LIBS}
@@ -378,7 +375,6 @@ set(CPP_CORE_LINK_LIBRARIES
     ${G2O_LIBRARIES}
     ${TBB_LINK_LIBS}
     gtsam  
-    ${Boost_LIBRARIES}
     nlohmann_json::nlohmann_json
 )
 

@@ -181,6 +181,40 @@ function linked_libgtsam_dir(){
     fi
 }
 
+# NOTE: gtsam has some issues when compiling with march=native option!
+# https://groups.google.com/g/gtsam-users/c/jdySXchYVQg
+# https://bitbucket.org/gtborg/gtsam/issues/414/compiling-with-march-native-results-in 
+GTSAM_OPTIONS="-DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_BUILD_WITH_MARCH_NATIVE=$WITH_MARCH_NATIVE -DGTSAM_BUILD_PYTHON=ON -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF" 
+if [[ "$version" == *"24.04"* ]] ; then
+    # Ubuntu 24.04 requires CMake 3.22 or higher
+    GTSAM_OPTIONS+=" -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+fi
+# Pin the interpreter: with GTSAM_PYTHON_VERSION set, GTSAM skips its own Python lookup and
+# the wrapper (pybind11) uses PYTHON_EXECUTABLE.
+GTSAM_OPTIONS+=" -DGTSAM_THROW_CHEIRALITY_EXCEPTION=OFF -DGTSAM_PYTHON_VERSION=$PYTHON_VERSION"
+GTSAM_OPTIONS+=" -DPYTHON_EXECUTABLE=$PYTHON_EXE -DPython_EXECUTABLE=$PYTHON_EXE -DPython3_EXECUTABLE=$PYTHON_EXE"
+if [[ "$OSTYPE" == darwin* ]]; then
+    GTSAM_OPTIONS+=" -DGTSAM_WITH_TBB=OFF"
+fi
+# GTSAM looks for Ceres only for its tests/timing (disabled here). Skip the lookup: a system
+# Ceres (e.g. Ubuntu's libceres-dev) fails to configure when its glog is not found, e.g. in conda.
+GTSAM_OPTIONS+=" -DCMAKE_DISABLE_FIND_PACKAGE_Ceres=ON"
+# pyslam does not use GTSAM's Boost features (serialization, timers, ...), so build without Boost
+# and avoid depending on a full Boost installation.
+GTSAM_OPTIONS+=" -DGTSAM_ENABLE_BOOST_SERIALIZATION=OFF -DGTSAM_USE_BOOST_FEATURES=OFF"
+# Do not turn warnings into errors: newer compilers (e.g. GCC 15 with AVX-512 and Eigen) emit
+# warnings such as -Wmaybe-uninitialized that would otherwise fail the build.
+GTSAM_OPTIONS+=" -DGTSAM_BUILD_WITH_WERROR=OFF"
+# pyslam does not use gtsam_unstable: skip it (and its python module) to shorten the build
+GTSAM_OPTIONS+=" -DGTSAM_BUILD_UNSTABLE=OFF"
+# Build with the install paths (install names on macOS, RPATH on Linux), so that the python
+# module installed from the build tree loads the installed libgtsam (see above).
+GTSAM_OPTIONS+=" -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH=$GTSAM_INSTALL_DIR/lib -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+# The effective GTSAM configuration is recorded next to the installed library: rebuild (from a fresh
+# build dir) when it differs, e.g. after pulling changed GTSAM_OPTIONS onto an existing install.
+GTSAM_CONFIG_STAMP_FILE="$GTSAM_INSTALL_DIR/.pyslam_gtsam_options"
+GTSAM_CONFIG_STAMP=$(echo "$GTSAM_TAG -DCMAKE_BUILD_TYPE=Release $GTSAM_OPTIONS $EXTERNAL_OPTIONS $MAC_OPTIONS" | xargs)
+
 # The gtsam python module must load the *installed* libgtsam, the same one that gtsam_factors
 # and the C++ core link. The module is pip-installed from the build tree (see below), so the build must
 # use the install paths (CMAKE_BUILD_WITH_INSTALL_RPATH below); otherwise the build-tree libgtsam
@@ -193,32 +227,20 @@ if [[ ! -f "$TARGET_GTSAM_LIB" || ! -f "$GTSAM_CONFIG_FILE" || -z "$BUILD_GTSAM_
 elif [[ "$(linked_libgtsam_dir "$BUILD_GTSAM_PY_MODULE")" != "$GTSAM_INSTALL_DIR/lib" ]]; then
     echo "The gtsam python module in build/ does not link $GTSAM_INSTALL_DIR/lib: rebuilding GTSAM"
     NEED_GTSAM_BUILD=true
+elif [[ "$(cat "$GTSAM_CONFIG_STAMP_FILE" 2>/dev/null)" != "$GTSAM_CONFIG_STAMP" ]]; then
+    echo "The GTSAM configuration changed (or was not recorded): rebuilding GTSAM"
+    NEED_GTSAM_BUILD=true
 fi
 
 if [[ "$NEED_GTSAM_BUILD" == true ]]; then
-	cd build
-    # NOTE: gtsam has some issues when compiling with march=native option!
-    # https://groups.google.com/g/gtsam-users/c/jdySXchYVQg
-    # https://bitbucket.org/gtborg/gtsam/issues/414/compiling-with-march-native-results-in 
-    GTSAM_OPTIONS="-DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_BUILD_WITH_MARCH_NATIVE=$WITH_MARCH_NATIVE -DGTSAM_BUILD_PYTHON=ON -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF" 
-    if [[ "$version" == *"24.04"* ]] ; then
-        # Ubuntu 24.04 requires CMake 3.22 or higher
-        GTSAM_OPTIONS+=" -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
-    fi
-    # Pin the interpreter: with GTSAM_PYTHON_VERSION set, GTSAM skips its own Python lookup and
-    # the wrapper (pybind11) uses PYTHON_EXECUTABLE.
-    GTSAM_OPTIONS+=" -DGTSAM_THROW_CHEIRALITY_EXCEPTION=OFF -DGTSAM_PYTHON_VERSION=$PYTHON_VERSION"
-    GTSAM_OPTIONS+=" -DPYTHON_EXECUTABLE=$PYTHON_EXE -DPython_EXECUTABLE=$PYTHON_EXE -DPython3_EXECUTABLE=$PYTHON_EXE"
-    if [[ "$OSTYPE" == darwin* ]]; then
-        GTSAM_OPTIONS+=" -DGTSAM_WITH_TBB=OFF"
-    fi
-    # Build with the install paths (install names on macOS, RPATH on Linux), so that the python
-    # module installed from the build tree loads the installed libgtsam (see above).
-    GTSAM_OPTIONS+=" -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH=$GTSAM_INSTALL_DIR/lib -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+    # start from scratch: a changed configuration must not reuse the old CMake cache or leave stale
+    # files (e.g. a Boost-linked GTSAMConfig or libgtsam_unstable) in install/
+    rm -rf build install && mkdir build && cd build || exit 1
     echo GTSAM_OPTIONS: $GTSAM_OPTIONS
     cmake .. -DCMAKE_INSTALL_PREFIX="$GTSAM_INSTALL_DIR" -DCMAKE_BUILD_TYPE=Release $GTSAM_OPTIONS $EXTERNAL_OPTIONS $MAC_OPTIONS || { print_red "Error: GTSAM cmake configure failed"; exit 1; }
 	make -j $NUM_CORES || { print_red "Error: GTSAM build failed"; exit 1; }
     make install || { print_red "Error: GTSAM install failed"; exit 1; }
+    echo "$GTSAM_CONFIG_STAMP" > "$GTSAM_CONFIG_STAMP_FILE"
     cd ..
 fi
 
@@ -230,7 +252,7 @@ function installed_gtsam_py_module(){
 }
 INSTALLED_GTSAM_PY_VERSION=$($PYTHON_EXE -c "import gtsam, importlib.metadata as m; print(m.version('gtsam'))" 2>/dev/null)
 INSTALLED_GTSAM_PY_LIB_DIR=$(linked_libgtsam_dir "$(installed_gtsam_py_module)")
-if [[ "$INSTALLED_GTSAM_PY_VERSION" != "$GTSAM_TAG" || "$INSTALLED_GTSAM_PY_LIB_DIR" != "$GTSAM_INSTALL_DIR/lib" ]]; then
+if [[ "$NEED_GTSAM_BUILD" == true || "$INSTALLED_GTSAM_PY_VERSION" != "$GTSAM_TAG" || "$INSTALLED_GTSAM_PY_LIB_DIR" != "$GTSAM_INSTALL_DIR/lib" ]]; then
     echo "Installing gtsam python package (found: '${INSTALLED_GTSAM_PY_VERSION:-none}' linking '${INSTALLED_GTSAM_PY_LIB_DIR:-none}', expected: $GTSAM_TAG linking $GTSAM_INSTALL_DIR/lib)"
     # Build the module (and type stubs), then pip-install it into $PYTHON_EXE. `make python-install`
     # is not used: it adds `pip install --user` outside a virtualenv (e.g. in a conda env), which

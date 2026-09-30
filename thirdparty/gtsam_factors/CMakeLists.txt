@@ -70,9 +70,6 @@ set_property(TARGET gtsam PROPERTY SYSTEM FALSE)
 message(STATUS "gtsam lib dirs: ${GTSAM_LIBRARY_DIRS}")
 message(STATUS "gtsam libs: ${GTSAM_LIBS}")
 
-find_package(Boost REQUIRED COMPONENTS serialization filesystem)
-message(STATUS "Boost_VERSION: ${Boost_VERSION}")
-message(STATUS "Boost includes: ${Boost_INCLUDE_DIRS}")
 
 
 # if (APPLE)
@@ -103,7 +100,6 @@ include_directories(BEFORE ${GTSAM_INCLUDE_DIR})
 include_directories(
     ${PYTHON_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
-    ${Boost_INCLUDE_DIRS}
     ${TBB_INCLUDE_DIRS}
 )
 
@@ -126,7 +122,6 @@ pybind11_add_module(
 )
 target_link_libraries(gtsam_factors PRIVATE
   gtsam
-  ${Boost_LIBRARIES}
   ${TBB_LIBRARIES}
 )
 
