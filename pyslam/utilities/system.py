@@ -59,11 +59,60 @@ def str2bool(v):
         return False
 
 
+class MissingImport:
+    """Stand-in returned by import_from() when an optional import fails.
+
+    It is falsy like the None returned before, but it keeps the cause: calling it or accessing
+    an attribute (e.g. SomeFeature2D(...) or SomeModel.from_pretrained(...)) raises a RuntimeError
+    that names the component, the cause and what to do, instead of a later
+    "'NoneType' object is not callable".
+    """
+
+    def __init__(self, module, name, error):
+        self._module = module
+        self._name = name
+        self._error = error
+
+    def __bool__(self):
+        return False
+
+    def __repr__(self):
+        return f"MissingImport({self._module}.{self._name})"
+
+    def message(self):
+        cause = f"{type(self._error).__name__}: {self._error}"
+        missing = getattr(self._error, "name", None) or ""  # set by ModuleNotFoundError
+        tf_names = ("tensorflow", "tensorflow_hub", "tf_slim", "keras")
+        if missing.split(".")[0] in tf_names or "tensorflow" in str(self._error).lower():
+            hint = "It needs TensorFlow, which is not part of the core installation."
+        elif isinstance(self._error, ModuleNotFoundError):
+            hint = (
+                f"The Python module '{missing}' is missing. Learned features and matchers need "
+                "scripts/install_git_modules.sh (third-party code, patches and model weights), and "
+                "some components scripts/install_thirdparty.sh; otherwise install the package."
+            )
+        else:
+            hint = "Install or fix the component, or select another one in the configuration."
+        return (
+            f"{self._name} is not available: cannot import it from {self._module} ({cause})\n"
+            f"{hint} See also docs/TROUBLESHOOTING.md."
+        )
+
+    def __call__(self, *args, **kwargs):
+        raise RuntimeError(self.message())
+
+    def __getattr__(self, attr):
+        if attr.startswith("__"):  # keep copy/pickle/inspection working
+            raise AttributeError(attr)
+        raise RuntimeError(self.message())
+
+
 # This function check and exec 'from module import name' and directly return the 'name'.'method'.
 # The method is used to directly return a 'method' of 'name' (i.e. 'module'.'name'.'method')
 # N.B.: if a method is needed you CAN'T
 #   from module import name.method
 # since method is an attribute of name!
+# If the import fails, it returns a falsy MissingImport that raises a descriptive error when used.
 def import_from(module, name, method=None, debug=False):
     from .logging import Printer
 
@@ -74,7 +123,7 @@ def import_from(module, name, method=None, debug=False):
             return imported_name
         else:
             return getattr(imported_name, method)
-    except:
+    except Exception as e:
         if method is not None:
             name = name + "." + method
         Printer.orange(
@@ -82,11 +131,11 @@ def import_from(module, name, method=None, debug=False):
             + name
             + " from "
             + module
-            + ", check the file docs/TROUBLESHOOTING.md"
+            + f" ({type(e).__name__}: {e}), check the file docs/TROUBLESHOOTING.md"
         )
         if debug:
             Printer.orange(traceback.format_exc())
-        return None
+        return MissingImport(module, name, e)
 
 
 def get_opencv_version():
