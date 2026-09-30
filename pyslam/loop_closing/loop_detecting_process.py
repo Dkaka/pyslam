@@ -131,6 +131,8 @@ class LoopDetectingProcess:
 
         self.is_running = mp.Value("i", 0)
         self.is_looping = mp.Value("i", 0)
+        # Set by the launched process if the loop detector fails to initialise (empty: no error)
+        self.init_error = mp.Array("c", 2048)
 
         self.start()
 
@@ -155,6 +157,7 @@ class LoopDetectingProcess:
                 self.save_request_completed,
                 self.save_request_condition,
                 self.time_loop_detection,
+                self.init_error,
             ),
         )
 
@@ -165,7 +168,25 @@ class LoopDetectingProcess:
             time.sleep(3)  # give a bit of time for the process to start and initialize
 
     def is_ready(self):
+        # Raise instead of reporting "not ready" forever: callers wait on this without a timeout.
+        if self.init_error.value:
+            raise RuntimeError(
+                f"Loop detector '{self.loop_detector_name()}' failed to initialise: "
+                f"{self.init_error.value.decode(errors='replace')}\n"
+                "Loop closing cannot run. Fix the cause above, or select a different loop "
+                "detector (loop_detection_config in main_slam.py, or loop_detection_config_name "
+                "in the settings), or set it to None to disable loop closing."
+            )
+        if self.is_looping.value == 0 and not self.process.is_alive():
+            raise RuntimeError(
+                f"Loop detecting process for '{self.loop_detector_name()}' exited during "
+                f"initialisation (exit code {self.process.exitcode})."
+            )
         return self.is_running.value == 1 and self.is_looping.value == 1
+
+    def loop_detector_name(self):
+        global_descriptor_type = self.loop_detector_config.get("global_descriptor_type")
+        return getattr(global_descriptor_type, "name", str(global_descriptor_type))
 
     def save(self, path):
         task_type = LoopDetectorTaskType.SAVE
@@ -262,13 +283,24 @@ class LoopDetectingProcess:
                 self.process.terminate()
 
             # Shutdown the manager AFTER the process has exited
-            if hasattr(self, "mp_manager") and self.mp_manager is not None:
-                try:
-                    self.mp_manager.shutdown()
-                except Exception as e:
-                    LoopDetectorBase.print(f"Warning: Error shutting down manager: {e}")
+            self._shutdown_manager()
 
             LoopDetectorBase.print("LoopDetectingProcess: done")
+        elif self.init_error.value:
+            # The launched process already exited after failing to initialise: reap it and stop
+            # the manager, otherwise the manager process keeps the program from exiting.
+            self.process.join(timeout=Parameters.kMultiprocessingProcessJoinDefaultTimeout)
+            if self.process.is_alive():
+                self.process.terminate()
+            self._shutdown_manager()
+
+    def _shutdown_manager(self):
+        if getattr(self, "mp_manager", None) is not None:
+            try:
+                self.mp_manager.shutdown()
+            except Exception as e:
+                LoopDetectorBase.print(f"Warning: Error shutting down manager: {e}")
+            self.mp_manager = None
 
     def init(self, loop_detector_config, slam_info: SlamFeatureManagerInfo):
         self.loop_detector = loop_detector_factory(**loop_detector_config, slam_info=slam_info)
@@ -296,10 +328,20 @@ class LoopDetectingProcess:
         save_request_completed,
         save_request_condition,
         time_loop_detection,
+        init_error,
     ):
         is_running.value = 1
         LoopDetectorBase.print("LoopDetectingProcess: starting...")
-        self.init(loop_detector_config, slam_info)
+        try:
+            self.init(loop_detector_config, slam_info)
+        except Exception as e:
+            # Report to the main process (see is_ready()) instead of running without a detector.
+            message = f"{type(e).__name__}: {e}"
+            Printer.red(f"LoopDetectingProcess: loop detector failed to initialise: {message}")
+            Printer.red(traceback.format_exc())
+            init_error.value = message.encode(errors="replace")[: len(init_error) - 1]
+            is_running.value = 0
+            return
         # main loop
         is_looping.value = 1
         while is_running.value == 1:

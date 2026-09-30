@@ -131,6 +131,8 @@ class LoopDetectorVlad(LoopDetectorBase):
             if kPrintTrackebackDetails:
                 traceback_details = traceback.format_exc()
                 LoopDetectorBase.print(f"\t traceback details: {traceback_details}")
+            # Re-raise: a detector without its extractor would silently never detect a loop.
+            raise
 
     def init_db(self):
         LoopDetectorBase.print(f"LoopDetectorVlad: init_db()")
