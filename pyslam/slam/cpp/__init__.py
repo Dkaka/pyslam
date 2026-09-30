@@ -58,11 +58,37 @@ if os.path.exists(CPP_LIB_DIR):
 else:
     if USE_CPP_CORE:
         Printer.red(
-            f"❌ USE_CPP_CORE: {USE_CPP_CORE}, CPP_LIB_DIR not found: {CPP_LIB_DIR}.\n You need to build the C++ core module or set USE_CPP_CORE to False in config_parameters.py file."
+            f"❌ USE_CPP_CORE: {USE_CPP_CORE}, CPP_LIB_DIR not found: {CPP_LIB_DIR}.\n The C++ core is not built: run `./build_cpp_core.sh` from the pyslam root (after `cd cpp && ./build.sh`), or set USE_CPP_CORE to False in config_parameters.py (or PYSLAM_USE_CPP=0)."
         )
         sys.exit(1)
     else:
         print(f"CPP_LIB_DIR not found: {CPP_LIB_DIR}")
+
+
+_CPP_UTILS_MODULES = (
+    "pyslam_utils", "sim3solver", "pnpsolver", "color_utils", "glutils", "hamming",
+    "trajectory_tools", "volumetric",
+)
+
+
+def _build_hint(error):
+    """Build instructions for a failed import of the C++ core or of the Python core."""
+    missing = getattr(error, "name", None) or ""
+    if missing in _CPP_UTILS_MODULES:
+        return (
+            f"The C++ utility module '{missing}' is not built: build pyslam's C++ modules with "
+            "`cd cpp && ./build.sh` (from the pyslam root)."
+        )
+    if missing == "cpp_core":
+        return (
+            "The C++ core is not built: run `./build_cpp_core.sh` (it needs GTSAM "
+            "(scripts/install_gtsam.sh), g2o (thirdparty/g2opy/build.sh) and nlohmann json "
+            "(scripts/install_json_nlohmann.sh))."
+        )
+    return (
+        "Rebuild the C++ modules (`cd cpp && ./build.sh`, then `./build_cpp_core.sh`) in the "
+        "active Python environment."
+    )
 
 
 def _cleanup_cpp_resources():
@@ -166,6 +192,8 @@ def _import_cpp_core():
         return out_classes, True
 
     except Exception as e:
+        global _CPP_IMPORT_ERROR
+        _CPP_IMPORT_ERROR = e
         traceback.print_exc()
         print(f"❌ Failed to import C++ core module: {e}")
         return None, False
@@ -233,10 +261,16 @@ def _import_python_core():
         return out_classes, True
 
     except Exception as e:
-        traceback.print_exc()
+        global _PYTHON_IMPORT_ERROR
+        _PYTHON_IMPORT_ERROR = e
+        if not USE_CPP_CORE:  # only relevant when the Python core is the one selected
+            traceback.print_exc()
         print(f"❌ Failed to import Python fallback implementations: {e}")
         return None, False
 
+
+_CPP_IMPORT_ERROR = None
+_PYTHON_IMPORT_ERROR = None
 
 # Try to import the C++ core module
 if USE_CPP_CORE:
@@ -265,7 +299,17 @@ else:
     else:
         if USE_CPP_CORE:
             Printer.red(
-                f"❌ USE_CPP_CORE: {USE_CPP_CORE}, C++ core module not available.\n Something went wrong during the build process. You may need to rebuild the C++ core module or set USE_CPP_CORE to True in config_parameters.py file."
+                f"❌ USE_CPP_CORE: {USE_CPP_CORE}, the C++ core module cannot be imported "
+                f"({type(_CPP_IMPORT_ERROR).__name__}: {_CPP_IMPORT_ERROR}).\n "
+                f"{_build_hint(_CPP_IMPORT_ERROR)}\n Alternatively, use the Python core: set "
+                "USE_CPP_CORE to False in config_parameters.py or PYSLAM_USE_CPP=0."
+            )
+            sys.exit(1)
+        elif not PYTHON_AVAILABLE:
+            Printer.red(
+                f"❌ USE_CPP_CORE: {USE_CPP_CORE}, the Python core cannot be imported "
+                f"({type(_PYTHON_IMPORT_ERROR).__name__}: {_PYTHON_IMPORT_ERROR}).\n "
+                f"{_build_hint(_PYTHON_IMPORT_ERROR)}"
             )
             sys.exit(1)
         else:
@@ -296,10 +340,10 @@ class CppModule:
 class PythonModule:
     """Wrapper class to provide Python module interface"""
 
-    classes = python_classes
+    classes = python_classes or {}
 
     def __init__(self):
-        for name, cls in python_classes.items():
+        for name, cls in (python_classes or {}).items():
             setattr(self, name, cls)
 
 
