@@ -73,7 +73,7 @@ dependencies = [
   "quaternion",
   "open3d",
   "pyqtgraph",
-  "pyqt5",
+  "pyside6",
   "pillow_heif",
   "opt_einsum",
   "configargparse",

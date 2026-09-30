@@ -84,7 +84,7 @@ if [[ "$OSTYPE" == darwin* ]]; then
         tbb tbb-devel libpng libtiff zlib libjpeg-turbo freetype \
         ffmpeg glew glfw boost \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        "pyqt>=5.15,<6" "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 else
     conda install -y -c conda-forge \
         pkg-config \
@@ -101,7 +101,7 @@ else
         compilers gcc_linux-64 gxx_linux-64 tbb tbb-devel \
         boost libboost-devel openblas \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        "pyqt>=5.15,<6" "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 fi
 
 # Install the Python packages after the conda packages, so that conda does not replace pip-installed
@@ -110,8 +110,9 @@ fi
 # opencv-python(-headless) dist-infos, so pip does not install another cv2 over it. The qt6 build is
 # pinned because the default solve can pick the headless one, which has no cv2.imshow.
 # OpenCV 4 only: orbslam2_features needs find_package(OpenCV 4). SURF (non-free) is not available.
-# PyQt5 comes from conda-forge too (pyqt): pip's PyQt5 wheel uses the system glib, and a process that
-# imports it before cv2 then fails to load conda's cv2 (e.g. "undefined symbol: g_string_copy").
+# The Qt bindings for pyqtgraph are PySide6 from conda-forge, on the same qt6-main as OpenCV, so one Qt
+# is loaded. With PyQt5 (Qt5) next to OpenCV's Qt6, macOS segfaults when both show a window (duplicate
+# Objective-C classes), and on Linux pip's PyQt5 wheel loads the system glib, which breaks conda's cv2.
 "$PYTHON_EXE" -m pip install --upgrade pip setuptools wheel build || exit 1
 "$PYTHON_EXE" -m pip install -e . || { print_red "ERROR: pip install -e . failed"; exit 1; }
 
