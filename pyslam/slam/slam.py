@@ -280,7 +280,13 @@ class Slam(object):
             self.GBA = self.loop_closing.GBA
             if do_start_loop_closing:
                 self.loop_closing.start()
-                wait_for_ready(self.loop_closing.is_ready, "LoopClosing")
+                try:
+                    wait_for_ready(self.loop_closing.is_ready, "LoopClosing")
+                except Exception:
+                    # Stop what has already started, so that the program exits with the error
+                    # instead of hanging on the remaining threads and processes.
+                    self.quit()
+                    raise
                 Printer.green(f"SLAM: Loop closing initialized and ready")
             else:
                 Printer.orange(

@@ -38,6 +38,25 @@ def get_torch_device(prefer_gpu: bool = True) -> torch.device:
     return torch.device("cpu")
 
 
+def trust_torch_hub_repos(repos):
+    """
+    Add GitHub repos ("owner/name") to torch.hub's trusted list, as answering 'y' to its prompt does.
+    torch >= 2.13 asks for confirmation before loading an untrusted repo; in a child process with no
+    terminal that prompt cannot be answered, so pyslam pre-trusts the repos of the models the user chose.
+    """
+    hub_dir = torch.hub.get_dir()
+    os.makedirs(hub_dir, exist_ok=True)
+    filepath = os.path.join(hub_dir, "trusted_list")
+    trusted = set()
+    if os.path.exists(filepath):
+        with open(filepath) as f:
+            trusted = {line.strip() for line in f}
+    missing = [r.replace("/", "_") for r in repos if r.replace("/", "_") not in trusted]
+    if missing:
+        with open(filepath, "a") as f:
+            f.writelines(name + "\n" for name in missing)
+
+
 def to_np(x, ret_type=float) -> np.ndarray:
     x_np: np.ndarray = None
     if type(x) == torch.Tensor:

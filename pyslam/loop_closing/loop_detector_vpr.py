@@ -200,6 +200,14 @@ class LoopDetectorVprBase(LoopDetectorBase):
             if kPrintTrackebackDetails:
                 traceback_details = traceback.format_exc()
                 LoopDetectorBase.print(f"\t traceback details: {traceback_details}")
+            # Re-raise: a detector without its extractor would silently never detect a loop.
+            if isinstance(e, ModuleNotFoundError) and e.name == "pkg_resources":
+                raise RuntimeError(
+                    f"{self.global_descriptor_name}: a dependency (e.g. tensorflow_hub) needs "
+                    "pkg_resources, which setuptools>=81 removed: install setuptools<81 "
+                    "(scripts/install_pip3_packages.sh does this)"
+                ) from e
+            raise
 
     def init_db(self):
         LoopDetectorBase.print(f"LoopDetectorVprBase: init_db()")
@@ -213,6 +221,16 @@ class LoopDetectorVprBase(LoopDetectorBase):
             f"LoopDetectorVprBase: init_global_feature_extractor: global_descriptor_name: {global_descriptor_name}"
         )
         global_feature_extractor = None
+        # These models are loaded with torch.hub from repos outside torch's trusted owners
+        torch_hub_repos = {
+            "cosplace": "gmberton/cosplace",
+            "eigenplaces": "gmberton/eigenplaces",
+            "megaloc": "gmberton/MegaLoc",
+        }
+        if global_descriptor_name.lower() in torch_hub_repos:
+            from pyslam.utilities.torch import trust_torch_hub_repos
+
+            trust_torch_hub_repos([torch_hub_repos[global_descriptor_name.lower()]])
         if global_descriptor_name.lower() == "hdc-delf":
             from feature_extraction.feature_extractor_holistic import HDCDELF
 
