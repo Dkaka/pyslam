@@ -51,10 +51,11 @@ def trust_torch_hub_repos(repos):
     if os.path.exists(filepath):
         with open(filepath) as f:
             trusted = {line.strip() for line in f}
-    missing = [r.replace("/", "_") for r in repos if r.replace("/", "_") not in trusted]
+    missing = [r for r in repos if r.replace("/", "_") not in trusted]
     if missing:
+        print(f"Adding torch.hub repo(s) {', '.join(missing)} to the trusted list {filepath}")
         with open(filepath, "a") as f:
-            f.writelines(name + "\n" for name in missing)
+            f.writelines(r.replace("/", "_") + "\n" for r in missing)
 
 
 def to_np(x, ret_type=float) -> np.ndarray:
