@@ -27,16 +27,21 @@ cd "$ROOT_DIR"
 
 PYTHON_EXE=$(get_python_exe)
 
-declare -A EXTRA_DESCRIPTIONS=(
-    [features]="Learned local features and matchers: SuperPoint, LightGlue, XFeat, DISK, ALIKED, D2-Net, R2D2, Key.Net, HardNet, SOSNet, TFeat, L2-Net, LoFTR"
-    [vpr]="Visual place recognition loop detectors: NetVLAD, CosPlace, EigenPlaces, MegaLoc, AlexNet"
-)
 EXTRAS_ORDER="features vpr"
+
+# extra_description <extra>: print the description, or nothing for an unknown extra
+# (a function rather than an associative array, which needs bash >= 4; macOS ships bash 3.2)
+function extra_description() {
+    case "$1" in
+        features) echo "Learned local features and matchers: SuperPoint, LightGlue, XFeat, DISK, ALIKED, D2-Net, R2D2, Key.Net, HardNet, SOSNet, TFeat, L2-Net, LoFTR" ;;
+        vpr) echo "Visual place recognition loop detectors: NetVLAD, CosPlace, EigenPlaces, MegaLoc, AlexNet" ;;
+    esac
+}
 
 function list_extras() {
     echo "Available extras:"
     for e in $EXTRAS_ORDER; do
-        printf "  %-10s %s\n" "$e" "${EXTRA_DESCRIPTIONS[$e]}"
+        printf "  %-10s %s\n" "$e" "$(extra_description "$e")"
     done
 }
 
@@ -104,7 +109,7 @@ if [[ $# -eq 0 || "$1" == "--list" || "$1" == "-h" || "$1" == "--help" ]]; then
 fi
 
 for extra in "$@"; do
-    if [[ -z "${EXTRA_DESCRIPTIONS[$extra]}" ]]; then
+    if [[ -z "$(extra_description "$extra")" ]]; then
         print_red "ERROR: unknown extra '$extra'"
         list_extras
         exit 1
@@ -114,7 +119,7 @@ done
 FAILED=""
 for extra in "$@"; do
     print_blue '================================================'
-    print_blue "Installing extra '$extra': ${EXTRA_DESCRIPTIONS[$extra]}"
+    print_blue "Installing extra '$extra': $(extra_description "$extra")"
     print_blue '================================================'
     install_$extra
     print_blue "Checking '$extra' and downloading its model weights (first run can take a while) ..."
