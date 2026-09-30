@@ -30,18 +30,15 @@
 #include <gtsam/nonlinear/Values.h>
 #include <gtsam/nonlinear/internal/NonlinearOptimizerState.h>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/format.hpp>
-#include <boost/range/adaptor/map.hpp>
-
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <string>
 
 using namespace gtsam;
-using boost::adaptors::map_values;
 
 namespace gtsam_factors {
 
@@ -49,7 +46,7 @@ namespace gtsam_factors {
 class LevenbergMarquardtOptimizerG2o : public NonlinearOptimizer {
   protected:
     const LevenbergMarquardtParams params_;
-    boost::posix_time::ptime startTime_;
+    std::chrono::steady_clock::time_point startTime_;
     double _tau = 1e-5;
 
     struct G2oLmState {
@@ -98,7 +95,7 @@ class LevenbergMarquardtOptimizerG2o : public NonlinearOptimizer {
           params_(LevenbergMarquardtParams::EnsureHasOrdering(params, graph)) {
         _g2oLmState.currentLambda = computeLambdaInit();
         _g2oLmState.maxTrialsAfterFailure = params.maxIterations;
-        startTime_ = boost::posix_time::microsec_clock::universal_time();
+        startTime_ = std::chrono::steady_clock::now();
     }
 
     LevenbergMarquardtOptimizerG2o(
@@ -110,11 +107,11 @@ class LevenbergMarquardtOptimizerG2o : public NonlinearOptimizer {
           params_(LevenbergMarquardtParams::ReplaceOrdering(params, ordering)) {
         _g2oLmState.currentLambda = computeLambdaInit();
         _g2oLmState.maxTrialsAfterFailure = params.maxIterations;
-        startTime_ = boost::posix_time::microsec_clock::universal_time();
+        startTime_ = std::chrono::steady_clock::now();
     }
 
     double computeLambdaInit() const {
-        auto linear = graph_.linearize(state_->values);
+        auto linear = graph_->linearize(state_->values);
         VectorValues diag = linear->hessianDiagonal();
         double maxDiag = 0.0;
         for (const auto &[_, vec] : diag)
@@ -142,7 +139,7 @@ class LevenbergMarquardtOptimizerG2o : public NonlinearOptimizer {
             Vector b = Vector::Zero(diag.size());
             SharedDiagonal model =
                 noiseModel::Isotropic::Sigma(diag.size(), 1.0 / std::sqrt(currentState->lambda));
-            damped.push_back(boost::make_shared<JacobianFactor>(key, A, b, model));
+            damped.push_back(std::make_shared<JacobianFactor>(key, A, b, model));
         }
         return damped;
     }
@@ -158,7 +155,7 @@ class LevenbergMarquardtOptimizerG2o : public NonlinearOptimizer {
             const Values backupValues = currentState->values;
             const double backupError = currentState->error;
 
-            auto linear = graph_.linearize(currentState->values);
+            auto linear = graph_->linearize(currentState->values);
             VectorValues sqrtHessianDiagonal = linear->hessianDiagonal();
             VectorValues b = linear->gradientAtZero(); // -J^T * e
 
@@ -181,7 +178,7 @@ class LevenbergMarquardtOptimizerG2o : public NonlinearOptimizer {
 
             if (success) {
                 Values newValues = currentState->values.retract(delta);
-                tempChi = graph_.error(newValues);
+                tempChi = graph_->error(newValues);
                 rho = (currentChi - tempChi) / computeScale(delta, b);
 
                 if (rho > 0 && std::isfinite(tempChi)) {
@@ -216,24 +213,25 @@ class LevenbergMarquardtOptimizerG2o : public NonlinearOptimizer {
             _g2oLmState.levenbergIterations++;
 
             if (params_.verbosityLM == LevenbergMarquardtParams::SUMMARY) {
-                std::cout << boost::format("% 4d % 8e   % 3.2e   % 3.2e  % 4d") %
-                                 currentState->iterations % tempChi % rho % currentState->lambda %
-                                 success
-                          << std::endl;
+                char line[128];
+                std::snprintf(line, sizeof(line), "% 4d % 8e   % 3.2e   % 3.2e  % 4d",
+                              static_cast<int>(currentState->iterations), tempChi, rho,
+                              currentState->lambda, static_cast<int>(success));
+                std::cout << line << std::endl;
             }
 
         } while (rho < 0 && qmax < _g2oLmState.maxTrialsAfterFailure);
 
-        return graph_.linearize(state_->values);
+        return graph_->linearize(state_->values);
     }
 
     void writeLogFile(double currentError) {
         auto currentState = static_cast<const State *>(state_.get());
         if (!params_.logFile.empty()) {
             std::ofstream os(params_.logFile, std::ios::app);
-            boost::posix_time::ptime now = boost::posix_time::microsec_clock::universal_time();
+            const auto now = std::chrono::steady_clock::now();
             os << currentState->totalNumberInnerIterations << ","
-               << 1e-6 * (now - startTime_).total_microseconds() << "," << currentError << ","
+               << std::chrono::duration<double>(now - startTime_).count() << "," << currentError << ","
                << currentState->lambda << "," << currentState->iterations << std::endl;
         }
     }

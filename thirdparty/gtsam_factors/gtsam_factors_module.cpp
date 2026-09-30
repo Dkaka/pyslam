@@ -173,7 +173,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
              py::arg("noise_model"), py::arg("key"), py::arg("calib"), py::arg("measured_p"),
              py::arg("world_P"))
         .def("evaluateError", &gtsam_factors::ResectioningFactor::evaluateError)
-        .def("error", &gtsam_factors::ResectioningFactor::error)
+        .def("error", py::overload_cast<const gtsam::Values &>(&gtsam_factors::ResectioningFactor::error, py::const_))
         .def("set_weight", &gtsam_factors::ResectioningFactor::setWeight)
         .def("get_weight", &gtsam_factors::ResectioningFactor::getWeight);
 
@@ -209,7 +209,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
              py::arg("noise_model"), py::arg("key"), py::arg("calib"), py::arg("measured_p"),
              py::arg("world_P"))
         .def("evaluateError", &gtsam_factors::ResectioningFactorTcw::evaluateError)
-        .def("error", &gtsam_factors::ResectioningFactorTcw::error)
+        .def("error", py::overload_cast<const gtsam::Values &>(&gtsam_factors::ResectioningFactorTcw::error, py::const_))
         .def("set_weight", &gtsam_factors::ResectioningFactorTcw::setWeight)
         .def("get_weight", &gtsam_factors::ResectioningFactorTcw::getWeight);
 
@@ -248,7 +248,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
              py::arg("noise_model"), py::arg("key"), py::arg("calib"), py::arg("measured_p_stereo"),
              py::arg("world_P"))
         .def("evaluateError", &gtsam_factors::ResectioningFactorStereo::evaluateError)
-        .def("error", &gtsam_factors::ResectioningFactorStereo::error)
+        .def("error", py::overload_cast<const gtsam::Values &>(&gtsam_factors::ResectioningFactorStereo::error, py::const_))
         .def("set_weight", &gtsam_factors::ResectioningFactorStereo::setWeight)
         .def("get_weight", &gtsam_factors::ResectioningFactorStereo::getWeight);
 
@@ -287,7 +287,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
              py::arg("noise_model"), py::arg("key"), py::arg("calib"), py::arg("measured_p_stereo"),
              py::arg("world_P"))
         .def("evaluateError", &gtsam_factors::ResectioningFactorStereoTcw::evaluateError)
-        .def("error", &gtsam_factors::ResectioningFactorStereoTcw::error)
+        .def("error", py::overload_cast<const gtsam::Values &>(&gtsam_factors::ResectioningFactorStereoTcw::error, py::const_))
         .def("set_weight", &gtsam_factors::ResectioningFactorStereoTcw::setWeight)
         .def("get_weight", &gtsam_factors::ResectioningFactorStereoTcw::getWeight);
 
@@ -297,8 +297,8 @@ PYBIND11_MODULE(gtsam_factors, m) {
         .def(py::init([](const Point2 &measured, const SharedNoiseModel &model, const Key &poseKey,
                          const Key &pointKey, const Cal3_S2 &K) {
                  return new gtsam_factors::WeightedGenericProjectionFactorCal3_S2(
-                     measured, model, poseKey, pointKey, boost::make_shared<Cal3_S2>(K),
-                     boost::none);
+                     measured, model, poseKey, pointKey, std::make_shared<Cal3_S2>(K),
+                     std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("pointKey"),
              py::arg("K"))
@@ -306,7 +306,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
                          const Key &poseKey, const Key &pointKey, const Cal3_S2 &K) {
                  return new gtsam_factors::WeightedGenericProjectionFactorCal3_S2(
                      measured, create_shared_noise_model(model), poseKey, pointKey,
-                     boost::make_shared<Cal3_S2>(K), boost::none);
+                     std::make_shared<Cal3_S2>(K), std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("pointKey"),
              py::arg("K"))
@@ -314,7 +314,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
                          const Key &poseKey, const Key &pointKey, const Cal3_S2 &K) {
                  return new gtsam_factors::WeightedGenericProjectionFactorCal3_S2(
                      measured, create_shared_noise_model(model), poseKey, pointKey,
-                     boost::make_shared<Cal3_S2>(K), boost::none);
+                     std::make_shared<Cal3_S2>(K), std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("pointKey"),
              py::arg("K"))
@@ -323,7 +323,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
                          const Key &pointKey, const Cal3_S2 &K) {
                  return new gtsam_factors::WeightedGenericProjectionFactorCal3_S2(
                      measured, create_shared_noise_model(model), poseKey, pointKey,
-                     boost::make_shared<Cal3_S2>(K), boost::none);
+                     std::make_shared<Cal3_S2>(K), std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("pointKey"),
              py::arg("K"))
@@ -336,8 +336,8 @@ PYBIND11_MODULE(gtsam_factors, m) {
         .def(py::init([](const StereoPoint2 &measured, const SharedNoiseModel &model,
                          const Key &poseKey, const Key &landmarkKey, const Cal3_S2Stereo &K) {
                  return new gtsam_factors::WeightedGenericStereoProjectionFactor3D(
-                     measured, model, poseKey, landmarkKey, boost::make_shared<Cal3_S2Stereo>(K),
-                     boost::none);
+                     measured, model, poseKey, landmarkKey, std::make_shared<Cal3_S2Stereo>(K),
+                     std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("landmarkKey"),
              py::arg("K"))
@@ -345,7 +345,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
                          const Key &poseKey, const Key &landmarkKey, const Cal3_S2Stereo &K) {
                  return new gtsam_factors::WeightedGenericStereoProjectionFactor3D(
                      measured, create_shared_noise_model(model), poseKey, landmarkKey,
-                     boost::make_shared<Cal3_S2Stereo>(K), boost::none);
+                     std::make_shared<Cal3_S2Stereo>(K), std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("landmarkKey"),
              py::arg("K"))
@@ -353,7 +353,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
                          const Key &poseKey, const Key &landmarkKey, const Cal3_S2Stereo &K) {
                  return new gtsam_factors::WeightedGenericStereoProjectionFactor3D(
                      measured, create_shared_noise_model(model), poseKey, landmarkKey,
-                     boost::make_shared<Cal3_S2Stereo>(K), boost::none);
+                     std::make_shared<Cal3_S2Stereo>(K), std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("landmarkKey"),
              py::arg("K"))
@@ -362,7 +362,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
                          const Key &landmarkKey, const Cal3_S2Stereo &K) {
                  return new gtsam_factors::WeightedGenericStereoProjectionFactor3D(
                      measured, create_shared_noise_model(model), poseKey, landmarkKey,
-                     boost::make_shared<Cal3_S2Stereo>(K), boost::none);
+                     std::make_shared<Cal3_S2Stereo>(K), std::nullopt);
              }),
              py::arg("measured"), py::arg("model"), py::arg("poseKey"), py::arg("landmarkKey"),
              py::arg("K"))
@@ -439,7 +439,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
              py::arg("sim_pose_key"), py::arg("calib"), py::arg("p"), py::arg("P"),
              py::arg("model"))
         .def("evaluateError", &gtsam_factors::SimResectioningFactor::evaluateError)
-        .def("error", &gtsam_factors::SimResectioningFactor::error)
+        .def("error", py::overload_cast<const gtsam::Values &>(&gtsam_factors::SimResectioningFactor::error, py::const_))
         .def("get_weight", &gtsam_factors::SimResectioningFactor::getWeight)
         .def("set_weight", &gtsam_factors::SimResectioningFactor::setWeight);
 
@@ -475,7 +475,7 @@ PYBIND11_MODULE(gtsam_factors, m) {
              py::arg("sim_pose_key"), py::arg("calib"), py::arg("p"), py::arg("P"),
              py::arg("model"))
         .def("evaluateError", &gtsam_factors::SimInvResectioningFactor::evaluateError)
-        .def("error", &gtsam_factors::SimInvResectioningFactor::error)
+        .def("error", py::overload_cast<const gtsam::Values &>(&gtsam_factors::SimInvResectioningFactor::error, py::const_))
         .def("get_weight", &gtsam_factors::SimInvResectioningFactor::getWeight)
         .def("set_weight", &gtsam_factors::SimInvResectioningFactor::setWeight);
 

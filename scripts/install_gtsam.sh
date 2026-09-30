@@ -106,9 +106,9 @@ echo "Using PYTHON_EXE: $PYTHON_EXE"
 
 PYTHON_VERSION=$($PYTHON_EXE -c "import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")")
 
-# GTSAM tag to build. thirdparty/gtsam.patch, thirdparty/gtsam_factors and the C++ core
+# GTSAM tag to build. thirdparty/gtsam_factors and the C++ core
 # (optimizer_gtsam.cpp) are written against this version, so they must be updated together.
-GTSAM_TAG="4.2a9"
+GTSAM_TAG="4.3.0"
 
 # The nproc alias in bash_utils.sh is not expanded in non-interactive scripts.
 if [[ "$OSTYPE" == darwin* ]]; then
@@ -127,18 +127,25 @@ if [[ "$PIXI_ACTIVATED" == true ]]; then
 fi
 echo "WITH_MARCH_NATIVE: $WITH_MARCH_NATIVE"
 
-# gtwrap (GTSAM Python bindings) needs pyparsing at build time (normally installed by install_pip3_packages.sh)
-ensure_python_package "$PYTHON_EXE" "pyparsing>=2.4.6" pyparsing || exit 1
+# gtwrap (GTSAM Python bindings) needs pyparsing at build time, and the python install generates
+# type stubs with pybind11-stubgen (see python/requirements.txt in GTSAM)
+ensure_python_package "$PYTHON_EXE" "pyparsing>=3.2.5" pyparsing || exit 1
+ensure_python_package "$PYTHON_EXE" "pybind11-stubgen>=2.5.1" pybind11_stubgen || exit 1
 
 cd thirdparty
+# A checkout of a different GTSAM version (e.g. from an older pySLAM) is replaced.
+if [ -d gtsam_local ]; then
+    LOCAL_GTSAM_TAG=$(git -C gtsam_local describe --tags --exact-match 2>/dev/null)
+    if [[ "$LOCAL_GTSAM_TAG" != "$GTSAM_TAG" ]]; then
+        print_yellow "thirdparty/gtsam_local is GTSAM '${LOCAL_GTSAM_TAG:-unknown}', not $GTSAM_TAG: removing it to rebuild"
+        rm -rf gtsam_local
+    fi
+fi
 if [ ! -d gtsam_local ]; then
-    # Remove a partial checkout on failure, so that the next run starts from scratch
-    # instead of silently building an unpatched or wrong version.
+    # Remove a partial checkout on failure, so that the next run starts from scratch.
     # Shallow clone of just the tag: the full history is large and slow to fetch.
-    if ! ( git clone --depth 1 --branch $GTSAM_TAG https://github.com/borglab/gtsam.git gtsam_local && \
-           cd gtsam_local && \
-           git apply ../gtsam.patch ); then
-        print_red "Error: failed to fetch GTSAM $GTSAM_TAG or apply thirdparty/gtsam.patch"
+    if ! git clone --depth 1 --branch $GTSAM_TAG https://github.com/borglab/gtsam.git gtsam_local; then
+        print_red "Error: failed to fetch GTSAM $GTSAM_TAG"
         rm -rf gtsam_local
         exit 1
     fi
@@ -157,6 +164,15 @@ function linked_libgtsam_dir(){
     local lib
     if [[ "$OSTYPE" == darwin* ]]; then
         lib=$(otool -L "$1" 2>/dev/null | awk '/libgtsam\./ {print $1; exit}')
+        # GTSAM >= 4.3 uses @rpath install names: resolve them like dyld, trying the
+        # module's LC_RPATH entries in order (with @loader_path expanded).
+        if [[ "$lib" == @rpath/* ]]; then
+            local rpath candidate
+            while read -r rpath; do
+                candidate="${rpath/@loader_path/$(dirname "$1")}/${lib#@rpath/}"
+                if [[ -f "$candidate" ]]; then lib="$candidate"; break; fi
+            done < <(otool -l "$1" 2>/dev/null | awk '/cmd LC_RPATH/ {getline; getline; print $2}')
+        fi
     else
         lib=$(ldd "$1" 2>/dev/null | awk '/libgtsam\.so/ {print $3; exit}')
     fi
@@ -166,7 +182,7 @@ function linked_libgtsam_dir(){
 }
 
 # The gtsam python module must load the *installed* libgtsam, the same one that gtsam_factors
-# and the C++ core link. `make python-install` pip-installs from the build tree, so the build must
+# and the C++ core link. The module is pip-installed from the build tree (see below), so the build must
 # use the install paths (CMAKE_BUILD_WITH_INSTALL_RPATH below); otherwise the build-tree libgtsam
 # is loaded as well and two copies of GTSAM end up in the same process.
 # Rebuild if the library is missing or the build-tree python module was built the old way.
@@ -184,13 +200,13 @@ if [[ "$NEED_GTSAM_BUILD" == true ]]; then
     # NOTE: gtsam has some issues when compiling with march=native option!
     # https://groups.google.com/g/gtsam-users/c/jdySXchYVQg
     # https://bitbucket.org/gtborg/gtsam/issues/414/compiling-with-march-native-results-in 
-    GTSAM_OPTIONS="-DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_BUILD_WITH_MARCH_NATIVE=$WITH_MARCH_NATIVE -DGTSAM_BUILD_PYTHON=ON -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_EXAMPLES=OFF" 
+    GTSAM_OPTIONS="-DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_BUILD_WITH_MARCH_NATIVE=$WITH_MARCH_NATIVE -DGTSAM_BUILD_PYTHON=ON -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF" 
     if [[ "$version" == *"24.04"* ]] ; then
         # Ubuntu 24.04 requires CMake 3.22 or higher
         GTSAM_OPTIONS+=" -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
     fi
     # Pin the interpreter: with GTSAM_PYTHON_VERSION set, GTSAM skips its own Python lookup and
-    # the wrapper (pybind11) uses PYTHON_EXECUTABLE, which is also what `make python-install` runs.
+    # the wrapper (pybind11) uses PYTHON_EXECUTABLE.
     GTSAM_OPTIONS+=" -DGTSAM_THROW_CHEIRALITY_EXCEPTION=OFF -DGTSAM_PYTHON_VERSION=$PYTHON_VERSION"
     GTSAM_OPTIONS+=" -DPYTHON_EXECUTABLE=$PYTHON_EXE -DPython_EXECUTABLE=$PYTHON_EXE -DPython3_EXECUTABLE=$PYTHON_EXE"
     if [[ "$OSTYPE" == darwin* ]]; then
@@ -216,7 +232,10 @@ INSTALLED_GTSAM_PY_VERSION=$($PYTHON_EXE -c "import gtsam, importlib.metadata as
 INSTALLED_GTSAM_PY_LIB_DIR=$(linked_libgtsam_dir "$(installed_gtsam_py_module)")
 if [[ "$INSTALLED_GTSAM_PY_VERSION" != "$GTSAM_TAG" || "$INSTALLED_GTSAM_PY_LIB_DIR" != "$GTSAM_INSTALL_DIR/lib" ]]; then
     echo "Installing gtsam python package (found: '${INSTALLED_GTSAM_PY_VERSION:-none}' linking '${INSTALLED_GTSAM_PY_LIB_DIR:-none}', expected: $GTSAM_TAG linking $GTSAM_INSTALL_DIR/lib)"
-    ( cd build && make python-install ) || { print_red "Error: GTSAM python install failed"; exit 1; }
+    # Build the module (and type stubs), then pip-install it into $PYTHON_EXE. `make python-install`
+    # is not used: it adds `pip install --user` outside a virtualenv (e.g. in a conda env), which
+    # installs into ~/.local and shadows gtsam for every python of the same version.
+    ( cd build && make -j $NUM_CORES python-stubs && cd python && $PYTHON_EXE -m pip install . ) || { print_red "Error: GTSAM python install failed"; exit 1; }
 fi
 if ! $PYTHON_EXE -c "import gtsam" ; then
     print_red "Error: 'import gtsam' fails with $PYTHON_EXE"

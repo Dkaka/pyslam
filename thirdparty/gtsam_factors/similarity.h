@@ -41,7 +41,7 @@
 #include <gtsam/base/Matrix.h>
 #include <gtsam/base/Vector.h>
 
-#include <boost/shared_ptr.hpp> // Include Boost
+#include <memory>
 
 #include <iostream>
 
@@ -64,7 +64,7 @@ class PriorFactorSimilarity3 : public gtsam::NoiseModelFactor1<gtsam::Similarity
 
     // Define error function: Logmap of transformation error
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim,
-                                boost::optional<gtsam::Matrix &> H = boost::none) const override {
+                                gtsam::OptionalMatrixType H = OptionalNone) const override {
         gtsam::Vector7 error = gtsam::Similarity3::Logmap(prior_inverse_ * sim);
 
         if (H) {
@@ -78,11 +78,11 @@ class PriorFactorSimilarity3 : public gtsam::NoiseModelFactor1<gtsam::Similarity
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::make_shared<PriorFactorSimilarity3>(*this);
+        return std::make_shared<PriorFactorSimilarity3>(*this);
     }
 
     // shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<PriorFactorSimilarity3> shared_ptr;
+    typedef std::shared_ptr<PriorFactorSimilarity3> shared_ptr;
 };
 
 // Similarity3 prior factor with only scale. Goal is to only penalize scale difference.
@@ -97,7 +97,7 @@ class PriorFactorSimilarity3ScaleOnly : public gtsam::NoiseModelFactor1<gtsam::S
 
     // Define error function: Only penalize scale difference
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim,
-                                boost::optional<gtsam::Matrix &> H = boost::none) const override {
+                                gtsam::OptionalMatrixType H = OptionalNone) const override {
 #define USE_LOG_SCALE 1
 #if USE_LOG_SCALE
         double scale_error = std::log(sim.scale()) - std::log(prior_scale_); // Log-scale difference
@@ -119,11 +119,11 @@ class PriorFactorSimilarity3ScaleOnly : public gtsam::NoiseModelFactor1<gtsam::S
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::make_shared<PriorFactorSimilarity3ScaleOnly>(*this);
+        return std::make_shared<PriorFactorSimilarity3ScaleOnly>(*this);
     }
 
     // shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<PriorFactorSimilarity3ScaleOnly> shared_ptr;
+    typedef std::shared_ptr<PriorFactorSimilarity3ScaleOnly> shared_ptr;
 };
 
 // =====================================================================================================================
@@ -155,8 +155,8 @@ class BetweenFactorSimilarity3
 
     // Compute error (7D residual)
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_1, const gtsam::Similarity3 &sim3_2,
-                                boost::optional<gtsam::Matrix &> H1 = boost::none,
-                                boost::optional<gtsam::Matrix &> H2 = boost::none) const override {
+                                gtsam::OptionalMatrixType H1 = OptionalNone,
+                                gtsam::OptionalMatrixType H2 = OptionalNone) const override {
         const gtsam::Similarity3 sim3_1_inverse = sim3_1.inverse();
 
         // Compute predicted relative transformation
@@ -199,11 +199,11 @@ class BetweenFactorSimilarity3
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::make_shared<BetweenFactorSimilarity3>(*this);
+        return std::make_shared<BetweenFactorSimilarity3>(*this);
     }
 
     // shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<BetweenFactorSimilarity3> shared_ptr;
+    typedef std::shared_ptr<BetweenFactorSimilarity3> shared_ptr;
 };
 
 
@@ -236,8 +236,8 @@ class BetweenFactorSimilarity3Inverse
 
     // Compute error (7D residual)
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_1, const gtsam::Similarity3 &sim3_2,
-                                boost::optional<gtsam::Matrix &> H1 = boost::none,
-                                boost::optional<gtsam::Matrix &> H2 = boost::none) const override {
+                                gtsam::OptionalMatrixType H1 = OptionalNone,
+                                gtsam::OptionalMatrixType H2 = OptionalNone) const override {
         const gtsam::Similarity3 sim3_2_inverse = sim3_2.inverse();
         // Compute predicted relative transformation
         const gtsam::Similarity3 predicted =
@@ -280,11 +280,11 @@ class BetweenFactorSimilarity3Inverse
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::make_shared<BetweenFactorSimilarity3Inverse>(*this);
+        return std::make_shared<BetweenFactorSimilarity3Inverse>(*this);
     }
 
     // shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<BetweenFactorSimilarity3Inverse> shared_ptr;
+    typedef std::shared_ptr<BetweenFactorSimilarity3Inverse> shared_ptr;
 };
 
 
@@ -317,7 +317,7 @@ class BetweenFactorSimilarity3InverseOnlyS1
 
     // Compute error (7D residual)
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_1,
-                                boost::optional<gtsam::Matrix &> H = boost::none) const override {
+                                gtsam::OptionalMatrixType H = OptionalNone) const override {
         // Compute predicted relative transformation
         const gtsam::Similarity3 predicted =
             sim3_1 * sim3_2_inverse_; // Sc1w * Sc2w.inverse() = Sc1c2 = S12
@@ -348,11 +348,11 @@ class BetweenFactorSimilarity3InverseOnlyS1
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::make_shared<BetweenFactorSimilarity3InverseOnlyS1>(*this);
+        return std::make_shared<BetweenFactorSimilarity3InverseOnlyS1>(*this);
     }
 
     // shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<BetweenFactorSimilarity3InverseOnlyS1> shared_ptr;
+    typedef std::shared_ptr<BetweenFactorSimilarity3InverseOnlyS1> shared_ptr;
 };
 
 
@@ -386,7 +386,7 @@ class BetweenFactorSimilarity3InverseOnlyS2
 
     // Compute error (7D residual)
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_2,
-                                boost::optional<gtsam::Matrix &> H = boost::none) const override {
+                                gtsam::OptionalMatrixType H = OptionalNone) const override {
         const gtsam::Similarity3 sim3_2_inverse = sim3_2.inverse();                                    
         // Compute predicted relative transformation
         const gtsam::Similarity3 predicted =
@@ -418,11 +418,11 @@ class BetweenFactorSimilarity3InverseOnlyS2
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::make_shared<BetweenFactorSimilarity3InverseOnlyS2>(*this);
+        return std::make_shared<BetweenFactorSimilarity3InverseOnlyS2>(*this);
     }
 
     // shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<BetweenFactorSimilarity3InverseOnlyS2> shared_ptr;
+    typedef std::shared_ptr<BetweenFactorSimilarity3InverseOnlyS2> shared_ptr;
 };
 
 // =====================================================================================================================

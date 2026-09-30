@@ -41,7 +41,7 @@
  #include <gtsam/base/Matrix.h>
  #include <gtsam/base/Vector.h>
  
- #include <boost/shared_ptr.hpp> // Include Boost
+ #include <memory>
  
  #include <iostream>
  
@@ -49,12 +49,12 @@
  using symbol_shorthand::X;
 
 
- template <typename T> boost::shared_ptr<T> create_shared_noise_model(const T &model) {
-    return boost::make_shared<T>(model); // This makes a copy of model
+ template <typename T> std::shared_ptr<T> create_shared_noise_model(const T &model) {
+    return std::make_shared<T>(model); // This makes a copy of model
 }
 
 template <typename T>
-boost::shared_ptr<T> create_shared_noise_model(const boost::shared_ptr<T> &model) {
+std::shared_ptr<T> create_shared_noise_model(const std::shared_ptr<T> &model) {
     return model; // No copy, just return the same shared_ptr
 }
 

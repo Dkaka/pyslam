@@ -37,7 +37,7 @@
 #include <gtsam/geometry/StereoPoint2.h>
 #include <gtsam/geometry/Similarity3.h>
 
-#include <boost/make_shared.hpp>
+#include <memory>
 
 using namespace gtsam;
 using namespace gtsam::noiseModel;
@@ -67,14 +67,14 @@ public:
                         const gtsam::Point3& world_P)
         : Base(model, key), K_(calib), P_(world_P), p_(measured_p) {}
 
-    Vector evaluateError(const Pose3& pose, boost::optional<Matrix&> H = boost::none) const override {
+    Vector evaluateError(const Pose3& pose, gtsam::OptionalMatrixType H = OptionalNone) const override {
         gtsam::PinholeCamera<gtsam::Cal3_S2> camera(pose, K_);        
         try {
             if (weight_ <= std::numeric_limits<double>::epsilon()) {
                 if (H) *H = gtsam::Matrix::Zero(2,6);
                 return gtsam::Vector::Zero(2);
             } else {
-                const gtsam::Point2 delta = camera.project(P_, H, boost::none, boost::none) - p_;
+                const gtsam::Point2 delta = camera.project(P_, H, {}, {}) - p_;
                 const gtsam::Vector error(delta);
                 if (H) *H *= weight_;
                 return weight_ * error;
@@ -113,7 +113,7 @@ public:
             P_(world_P), p_(measured_p) {}
 
 #if USE_ANALYTICAL_JACOBIAN_FOR_TCW_RESECTION
-    Vector evaluateError(const gtsam::Pose3& Tcw, boost::optional<gtsam::Matrix&> H = boost::none) const override {
+    Vector evaluateError(const gtsam::Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
         try {
             if (weight_ <= std::numeric_limits<double>::epsilon()) {
                 if (H) *H = gtsam::Matrix::Zero(2,6);
@@ -159,7 +159,7 @@ public:
         }
     }
 #else 
-    Vector evaluateError(const Pose3& Tcw, boost::optional<Matrix&> H = boost::none) const override {
+    Vector evaluateError(const Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
         auto computeError = [&](const Pose3& Tcw) {
             const gtsam::Matrix3 Rcw = Tcw.rotation().matrix();
             const gtsam::Vector3 tcw = Tcw.translation();            
@@ -220,17 +220,17 @@ public:
                                 const StereoPoint2& measured_p_stereo,
                                 const Point3& world_P)
         : Base(model, key), /*K_(calib),*/ P_(world_P), p_stereo_(measured_p_stereo) {
-            K_ = boost::make_shared<Cal3_S2Stereo>(calib);
+            K_ = std::make_shared<Cal3_S2Stereo>(calib);
         }
 
-    Vector evaluateError(const Pose3& pose, boost::optional<Matrix&> H = boost::none) const override {
+    Vector evaluateError(const Pose3& pose, gtsam::OptionalMatrixType H = OptionalNone) const override {
         StereoCamera camera(pose, K_);
         try {
             if (weight_ <= std::numeric_limits<double>::epsilon()) {
                 if (H) *H = Matrix::Zero(3,6);
                 return Vector::Zero(3);
             } else {
-                const StereoPoint2 delta = camera.project(P_, H, boost::none, boost::none) - p_stereo_;
+                const StereoPoint2 delta = camera.project(P_, H, {}, {}) - p_stereo_;
                 const Vector error = delta.vector();
                 if (H) *H *= weight_;
                 return weight_ * error;
@@ -269,7 +269,7 @@ public:
           bf_(calib.baseline()*calib.fx()), P_(world_P), p_stereo_(measured_p_stereo) {}
 
 #if USE_ANALYTICAL_JACOBIAN_FOR_TCW_RESECTION
-    Vector evaluateError(const gtsam::Pose3& Tcw, boost::optional<gtsam::Matrix&> H = boost::none) const override {
+    Vector evaluateError(const gtsam::Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
         try {
             if (weight_ <= std::numeric_limits<double>::epsilon()) {
                 if (H) *H = gtsam::Matrix::Zero(3,6);
@@ -318,7 +318,7 @@ public:
         }
     }
 #else 
-    Vector evaluateError(const gtsam::Pose3& Tcw, boost::optional<gtsam::Matrix&> H = boost::none) const override {
+    Vector evaluateError(const gtsam::Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
         auto computeError = [&](const gtsam::Pose3& Tcw) {
             const gtsam::Matrix3 Rcw = Tcw.rotation().matrix();
             const gtsam::Vector3 tcw = Tcw.translation();            
@@ -385,7 +385,7 @@ class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3
                 calib_(calib), uv_(uv), P_(P) {}
     
         gtsam::Vector evaluateError(const gtsam::Similarity3& sim3,
-                                    boost::optional<gtsam::Matrix&> H = boost::none) const override {
+                                    gtsam::OptionalMatrixType H = OptionalNone) const override {
             auto computeError = [this](const gtsam::Similarity3& sim) {
                 const gtsam::Matrix3 R = sim.rotation().matrix();
                 const gtsam::Vector3 t = sim.translation();
@@ -415,7 +415,7 @@ class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3
         }
     
         virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-            return boost::make_shared<SimResectioningFactor>(*this);
+            return std::make_shared<SimResectioningFactor>(*this);
         }    
     };
     
@@ -438,7 +438,7 @@ class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3
                 calib_(calib), uv_(p), P_(P) {}
     
         gtsam::Vector evaluateError(const gtsam::Similarity3& sim3,
-                                    boost::optional<gtsam::Matrix&> H = boost::none) const override {
+                                    gtsam::OptionalMatrixType H = OptionalNone) const override {
             auto computeError = [this](const gtsam::Similarity3& sim) {
                 const gtsam::Matrix3 R = sim.rotation().matrix();
                 const gtsam::Vector3 t = sim.translation();
@@ -473,7 +473,7 @@ class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3
         }
     
         virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
-            return boost::make_shared<SimInvResectioningFactor>(*this);
+            return std::make_shared<SimInvResectioningFactor>(*this);
         }
     };
     

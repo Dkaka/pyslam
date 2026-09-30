@@ -35,7 +35,8 @@
 #include <gtsam/geometry/StereoPoint2.h>
 
 #include <iostream>
-#include <boost/shared_ptr.hpp>  // Include Boost
+#include <memory>
+#include <optional>
 
 using namespace gtsam;
 using symbol_shorthand::X;
@@ -52,8 +53,8 @@ class WeightedGenericProjectionFactor : public NoiseModelFactor2<POSE, LANDMARK>
 protected:
     // Keep a copy of measurement and calibration for I/O
     Point2 measured_;                     ///< 2D measurement
-    boost::shared_ptr<CALIBRATION> K_;    ///< shared pointer to calibration object
-    boost::optional<POSE> body_P_sensor_; ///< The pose of the sensor in the body frame
+    std::shared_ptr<CALIBRATION> K_;    ///< shared pointer to calibration object
+    std::optional<POSE> body_P_sensor_; ///< The pose of the sensor in the body frame
 
     // verbosity handling for Cheirality Exceptions
     bool throwCheirality_;   ///< If true, rethrows Cheirality exceptions (default: false)
@@ -68,7 +69,7 @@ public:
     typedef WeightedGenericProjectionFactor<POSE, LANDMARK, CALIBRATION> This;
 
     /// shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<This> shared_ptr;
+    typedef std::shared_ptr<This> shared_ptr;
 
     /// Default constructor
     WeightedGenericProjectionFactor() : measured_(0, 0), throwCheirality_(false), verboseCheirality_(false)
@@ -86,8 +87,8 @@ public:
      * @param body_P_sensor is the transform from body to sensor frame (default identity)
      */
     WeightedGenericProjectionFactor(const Point2 &measured, const SharedNoiseModel &model,
-                                    Key poseKey, Key pointKey, const boost::shared_ptr<CALIBRATION> &K,
-                                    boost::optional<POSE> body_P_sensor = boost::none) : 
+                                    Key poseKey, Key pointKey, const std::shared_ptr<CALIBRATION> &K,
+                                    std::optional<POSE> body_P_sensor = {}) : 
                                     Base(model, poseKey, pointKey), measured_(measured), K_(K), body_P_sensor_(body_P_sensor),
                                         throwCheirality_(false), verboseCheirality_(false) {}
 
@@ -104,9 +105,9 @@ public:
      * @param body_P_sensor is the transform from body to sensor frame  (default identity)
      */
     WeightedGenericProjectionFactor(const Point2 &measured, const SharedNoiseModel &model,
-                                    Key poseKey, Key pointKey, const boost::shared_ptr<CALIBRATION> &K,
+                                    Key poseKey, Key pointKey, const std::shared_ptr<CALIBRATION> &K,
                                     bool throwCheirality, bool verboseCheirality,
-                                    boost::optional<POSE> body_P_sensor = boost::none) : 
+                                    std::optional<POSE> body_P_sensor = {}) : 
                                     Base(model, poseKey, pointKey), measured_(measured), K_(K), body_P_sensor_(body_P_sensor),
                                         throwCheirality_(throwCheirality), verboseCheirality_(verboseCheirality) {}
 
@@ -116,7 +117,7 @@ public:
     /// @return a deep copy of this factor
     virtual gtsam::NonlinearFactor::shared_ptr clone() const
     {
-        return boost::static_pointer_cast<gtsam::NonlinearFactor>(
+        return std::static_pointer_cast<gtsam::NonlinearFactor>(
             gtsam::NonlinearFactor::shared_ptr(new This(*this)));
     }
 
@@ -143,7 +144,7 @@ public:
 
     /// Evaluate error h(x)-z and optionally derivatives
     Vector evaluateError(const Pose3 &pose, const Point3 &point,
-                         boost::optional<Matrix &> H1 = boost::none, boost::optional<Matrix &> H2 = boost::none) const
+                         gtsam::OptionalMatrixType H1 = OptionalNone, gtsam::OptionalMatrixType H2 = OptionalNone) const
     {
         try
         {
@@ -162,7 +163,7 @@ public:
                 {
                     gtsam::Matrix H0;
                     PinholeCamera<CALIBRATION> camera(pose.compose(*body_P_sensor_, H0), *K_);
-                    Point2 reprojectionError(camera.project(point, H1, H2, boost::none) - measured_);
+                    Point2 reprojectionError(camera.project(point, H1, H2, {}) - measured_);
                     *H1 = *H1 * H0;
                     *H1 *= weight_;
                     return weight_ * reprojectionError;
@@ -170,14 +171,14 @@ public:
                 else
                 {
                     PinholeCamera<CALIBRATION> camera(pose.compose(*body_P_sensor_), *K_);
-                    Point2 reprojectionError(camera.project(point, H1, H2, boost::none) - measured_);
+                    Point2 reprojectionError(camera.project(point, H1, H2, {}) - measured_);
                     return weight_ * reprojectionError;
                 }
             }
             else
             {
                 PinholeCamera<CALIBRATION> camera(pose, *K_);
-                Point2 reprojectionError(camera.project(point, H1, H2, boost::none) - measured_);
+                Point2 reprojectionError(camera.project(point, H1, H2, {}) - measured_);
                 if (H1)
                     *H1 *= weight_;
                 if (H2)
@@ -216,7 +217,7 @@ public:
     }
 
     /** return the calibration object */
-    inline const boost::shared_ptr<CALIBRATION> calibration() const
+    inline const std::shared_ptr<CALIBRATION> calibration() const
     {
         return K_;
     }
@@ -227,6 +228,7 @@ public:
     /** return flag for throwing cheirality exceptions */
     inline bool throwCheirality() const { return throwCheirality_; }
 
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
 private:
     /// Serialization function
     friend class boost::serialization::access;
@@ -241,9 +243,7 @@ private:
         ar &BOOST_SERIALIZATION_NVP(verboseCheirality_);
         ar &BOOST_SERIALIZATION_NVP(weight_);
     }
-
-public:
-    GTSAM_MAKE_ALIGNED_OPERATOR_NEW
+#endif
 };
 
 using WeightedGenericProjectionFactorCal3_S2 = WeightedGenericProjectionFactor<Pose3, Point3, Cal3_S2>;
@@ -261,8 +261,8 @@ class WeightedGenericStereoProjectionFactor : public NoiseModelFactor2<POSE, LAN
 private:
     // Keep a copy of measurement and calibration for I/O
     StereoPoint2 measured_;               ///< the measurement
-    boost::shared_ptr<CALIBRATION> K_;    ///< shared pointer to calibration
-    boost::optional<POSE> body_P_sensor_; ///< The pose of the sensor in the body frame
+    std::shared_ptr<CALIBRATION> K_;    ///< shared pointer to calibration
+    std::optional<POSE> body_P_sensor_; ///< The pose of the sensor in the body frame
 
     // verbosity handling for Cheirality Exceptions
     bool throwCheirality_;   ///< If true, rethrows Cheirality exceptions (default: false)
@@ -277,7 +277,7 @@ public:
     typedef WeightedGenericStereoProjectionFactor<POSE, LANDMARK, CALIBRATION> This;          
 
     /// shorthand for a smart pointer to a factor
-    typedef boost::shared_ptr<This> shared_ptr; 
+    typedef std::shared_ptr<This> shared_ptr; 
 
     /// shorthand for Pose Lie Value type
     typedef POSE CamPose;                       
@@ -302,8 +302,8 @@ public:
      * @param body_P_sensor is the transform from body to sensor frame (default identity)
      */
     WeightedGenericStereoProjectionFactor(const StereoPoint2 &measured, const SharedNoiseModel &model,
-                                Key poseKey, Key pointKey, const boost::shared_ptr<CALIBRATION> &K,
-                                boost::optional<POSE> body_P_sensor = boost::none) : 
+                                Key poseKey, Key pointKey, const std::shared_ptr<CALIBRATION> &K,
+                                std::optional<POSE> body_P_sensor = {}) : 
                                 Base(model, poseKey, pointKey), measured_(measured), K_(K), body_P_sensor_(body_P_sensor),
                                     throwCheirality_(false), verboseCheirality_(false) {}
 
@@ -319,9 +319,9 @@ public:
      * @param body_P_sensor is the transform from body to sensor frame  (default identity)
      */
     WeightedGenericStereoProjectionFactor(const StereoPoint2 &measured, const SharedNoiseModel &model,
-                                Key poseKey, Key pointKey, const boost::shared_ptr<CALIBRATION> &K,
+                                Key poseKey, Key pointKey, const std::shared_ptr<CALIBRATION> &K,
                                 bool throwCheirality, bool verboseCheirality,
-                                boost::optional<POSE> body_P_sensor = boost::none) : 
+                                std::optional<POSE> body_P_sensor = {}) : 
                                 Base(model, poseKey, pointKey), measured_(measured), K_(K), body_P_sensor_(body_P_sensor),
                                     throwCheirality_(throwCheirality), verboseCheirality_(verboseCheirality) {}
 
@@ -331,7 +331,7 @@ public:
     /// @return a deep copy of this factor
     virtual gtsam::NonlinearFactor::shared_ptr clone() const
     {
-        return boost::static_pointer_cast<gtsam::NonlinearFactor>(
+        return std::static_pointer_cast<gtsam::NonlinearFactor>(
             gtsam::NonlinearFactor::shared_ptr(new This(*this)));
     }
 
@@ -359,7 +359,7 @@ public:
 
     /** h(x)-z */
     Vector evaluateError(const Pose3 &pose, const Point3 &point,
-                         boost::optional<Matrix &> H1 = boost::none, boost::optional<Matrix &> H2 = boost::none) const
+                         gtsam::OptionalMatrixType H1 = OptionalNone, gtsam::OptionalMatrixType H2 = OptionalNone) const
     {
         try
         {
@@ -432,7 +432,7 @@ public:
     }
 
     /** return the calibration object */
-    inline const boost::shared_ptr<CALIBRATION> calibration() const
+    inline const std::shared_ptr<CALIBRATION> calibration() const
     {
         return K_;
     }
@@ -443,6 +443,7 @@ public:
     /** return flag for throwing cheirality exceptions */
     inline bool throwCheirality() const { return throwCheirality_; }
 
+#if GTSAM_ENABLE_BOOST_SERIALIZATION
 private:
     /** Serialization function */
     friend class boost::serialization::access;
@@ -458,6 +459,7 @@ private:
         ar &BOOST_SERIALIZATION_NVP(verboseCheirality_);
         ar &BOOST_SERIALIZATION_NVP(weight_);
     }
+#endif
 };
 
 using WeightedGenericStereoProjectionFactor3D = WeightedGenericStereoProjectionFactor<gtsam::Pose3, gtsam::Point3, gtsam::Cal3_S2Stereo>;
