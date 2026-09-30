@@ -125,7 +125,7 @@ fi
 
 # Install tesorflow and related packages
 pip install tensorflow==2.13
-pip install tensorflow_hub  # required by VPR
+pip install tensorflow_hub "setuptools<81"  # required by VPR (HDC-DELF); tensorflow_hub 0.16 imports pkg_resources, removed in setuptools 81
 pip install tf_slim==1.1.0
 pip install protobuf==3.20.3 --force-reinstall # delf
 
