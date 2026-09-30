@@ -20,7 +20,6 @@
 
 // #define GTSAM_SLOW_BUT_CORRECT_BETWEENFACTOR  // before including gtsam
 
-#include "numerical_derivative.h"
 
 #include <gtsam/inference/Symbol.h>
 
@@ -51,7 +50,9 @@
 using namespace gtsam;
 using symbol_shorthand::X;
 
+#ifndef SIM3_FACTOR_REVERSE_ERROR_DIRECTION
 #define SIM3_FACTOR_REVERSE_ERROR_DIRECTION 0
+#endif
 
 namespace gtsam_factors {
 
@@ -159,7 +160,7 @@ class PriorFactorSimilarity3ScaleOnly : public gtsam::NoiseModelFactor1<gtsam::S
 
 // =====================================================================================================================
 
-// Custom version of BetweenFactor<Similarity3> with autodifferencing
+// Custom version of BetweenFactor<Similarity3> with analytic Jacobians
 // Assuming 
 // sim3_1 = Swc1 
 // sim3_2 = Swc2
@@ -184,49 +185,28 @@ class BetweenFactorSimilarity3
 #endif
         {}
 
-    // Compute error (7D residual)
+    // Compute error (7D residual). Jacobians are analytic (see Sim3LogmapDerivative); with right
+    // perturbations S * Exp(d):  g * Exp(d) -> J,  and  Exp(d) inside g -> J * Ad(.).
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_1, const gtsam::Similarity3 &sim3_2,
                                 gtsam::OptionalMatrixType H1 = OptionalNone,
                                 gtsam::OptionalMatrixType H2 = OptionalNone) const override {
-        const gtsam::Similarity3 sim3_1_inverse = sim3_1.inverse();
-
-        // Compute predicted relative transformation
-        const gtsam::Similarity3 predicted =
-            sim3_1_inverse * sim3_2; // Swc1.inverse() * Swc2 = Sc1c2 = S12
-
-        // Compute the error in Sim3 space
+        const gtsam::Similarity3 predicted = sim3_1.inverse() * sim3_2; // Swc1^-1 * Swc2 = Sc1c2
 #if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-        gtsam::Similarity3 errorSim3 = measured_ * predicted.inverse();
-#else
-        gtsam::Similarity3 errorSim3 = measured_inverse_ * predicted;
-#endif
-
-        // Compute Jacobians only if needed
-        if (H1) {
-            *H1 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Similarity3>(
-                [&](const gtsam::Similarity3 &s1) {
-#if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-                    return Similarity3::Logmap(measured_ * (s1.inverse() * sim3_2).inverse());
-#else
-                    return Similarity3::Logmap(measured_inverse_ * (s1.inverse() * sim3_2));
-#endif
-                },
-                sim3_1, 1e-5);
+        const gtsam::Vector7 error = Similarity3::Logmap(measured_ * predicted.inverse());
+        if (H1 || H2) {
+            const gtsam::Matrix7 J = Sim3LogmapDerivative(error);
+            if (H1) *H1 = J;
+            if (H2) *H2 = -J * predicted.AdjointMap();
         }
-        if (H2) {
-            *H2 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Similarity3>(
-                [&](const gtsam::Similarity3 &s2) {
-#if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-                    return Similarity3::Logmap(measured_ * (sim3_1_inverse * s2).inverse());
 #else
-                    return Similarity3::Logmap(measured_inverse_ * (sim3_1_inverse * s2));
-#endif
-                },
-                sim3_2, 1e-5);
+        const gtsam::Vector7 error = Similarity3::Logmap(measured_inverse_ * predicted);
+        if (H1 || H2) {
+            const gtsam::Matrix7 J = Sim3LogmapDerivative(error);
+            if (H1) *H1 = -J * predicted.inverse().AdjointMap();
+            if (H2) *H2 = J;
         }
-
-        // Log map to get minimal 7D error representation
-        return Similarity3::Logmap(errorSim3);
+#endif
+        return error;
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
@@ -240,7 +220,7 @@ class BetweenFactorSimilarity3
 
 // =====================================================================================================================
 
-// Custom version of BetweenFactor<Similarity3> with autodifferencing for inverse error
+// Custom version of BetweenFactor<Similarity3> with analytic Jacobians for inverse error
 // Assuming:
 // sim3_1 = Sc1w
 // sim3_2 = Sc2w
@@ -265,49 +245,28 @@ class BetweenFactorSimilarity3Inverse
 #endif
         {}
 
-    // Compute error (7D residual)
+    // Compute error (7D residual), with analytic Jacobians (see BetweenFactorSimilarity3)
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_1, const gtsam::Similarity3 &sim3_2,
                                 gtsam::OptionalMatrixType H1 = OptionalNone,
                                 gtsam::OptionalMatrixType H2 = OptionalNone) const override {
-        const gtsam::Similarity3 sim3_2_inverse = sim3_2.inverse();
-        // Compute predicted relative transformation
-        const gtsam::Similarity3 predicted =
-            sim3_1 * sim3_2_inverse; // Sc1w * Sc2w.inverse() = Sc1c2 = S12
-
-        // Compute the error in Sim3 space
+        const gtsam::Similarity3 predicted = sim3_1 * sim3_2.inverse(); // Sc1w * Sc2w^-1 = Sc1c2
 #if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-        // For BetweenFactorSimilarity3Inverse, use predicted.inverse() * measured_ to match backward error semantics
-        gtsam::Similarity3 errorSim3 = predicted.inverse() * measured_;
-#else
-        gtsam::Similarity3 errorSim3 = measured_inverse_ * predicted;
-#endif
-
-        // Compute Jacobians only if needed
-        if (H1) {
-            *H1 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Similarity3>(
-                [&](const gtsam::Similarity3 &s1) {
-#if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-                    return Similarity3::Logmap((s1 * sim3_2_inverse).inverse() * measured_);
-#else
-                    return Similarity3::Logmap(measured_inverse_ * (s1 * sim3_2_inverse));
-#endif
-                },
-                sim3_1, 1e-5);
+        // use predicted.inverse() * measured_ to match backward error semantics
+        const gtsam::Vector7 error = Similarity3::Logmap(predicted.inverse() * measured_);
+        if (H1 || H2) {
+            const gtsam::Matrix7 JAd = Sim3LogmapDerivative(error) * (measured_.inverse() * sim3_1).AdjointMap();
+            if (H1) *H1 = -JAd;
+            if (H2) *H2 = JAd;
         }
-        if (H2) {
-            *H2 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Similarity3>(
-                [&](const gtsam::Similarity3 &s2) {
-#if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-                    return Similarity3::Logmap((sim3_1 * s2.inverse()).inverse() * measured_);
 #else
-                    return Similarity3::Logmap(measured_inverse_ * (sim3_1 * s2.inverse()));
-#endif
-                },
-                sim3_2, 1e-5);
+        const gtsam::Vector7 error = Similarity3::Logmap(measured_inverse_ * predicted);
+        if (H1 || H2) {
+            const gtsam::Matrix7 JAd = Sim3LogmapDerivative(error) * sim3_2.AdjointMap();
+            if (H1) *H1 = JAd;
+            if (H2) *H2 = -JAd;
         }
-
-        // Log map to get minimal 7D error representation
-        return Similarity3::Logmap(errorSim3);
+#endif
+        return error;
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
@@ -320,7 +279,7 @@ class BetweenFactorSimilarity3Inverse
 
 
 
-// Custom version of BetweenFactor<Similarity3> with autodifferencing for inverse error. Only s1 is optimized
+// Custom version of BetweenFactor<Similarity3> with analytic Jacobians for inverse error. Only s1 is optimized
 // Assuming:
 // sim3_1 = Sc1w
 // sim3_2 = Sc2w  FIXED
@@ -346,36 +305,18 @@ class BetweenFactorSimilarity3InverseOnlyS1
 #endif
     {}
 
-    // Compute error (7D residual)
+    // Compute error (7D residual), with analytic Jacobian (see BetweenFactorSimilarity3)
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_1,
                                 gtsam::OptionalMatrixType H = OptionalNone) const override {
-        // Compute predicted relative transformation
-        const gtsam::Similarity3 predicted =
-            sim3_1 * sim3_2_inverse_; // Sc1w * Sc2w.inverse() = Sc1c2 = S12
-
-        // Compute the error in Sim3 space
+        const gtsam::Similarity3 predicted = sim3_1 * sim3_2_inverse_; // Sc1w * Sc2w^-1 = Sc1c2
 #if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-        // For BetweenFactorSimilarity3Inverse, use predicted.inverse() * measured_ to match backward error semantics
-        gtsam::Similarity3 errorSim3 = predicted.inverse() * measured_;
+        const gtsam::Vector7 error = Similarity3::Logmap(predicted.inverse() * measured_);
+        if (H) *H = -Sim3LogmapDerivative(error) * (measured_.inverse() * sim3_1).AdjointMap();
 #else
-        gtsam::Similarity3 errorSim3 = measured_inverse_ * predicted;
+        const gtsam::Vector7 error = Similarity3::Logmap(measured_inverse_ * predicted);
+        if (H) *H = Sim3LogmapDerivative(error) * sim3_2_inverse_.inverse().AdjointMap();
 #endif
-
-        // Compute Jacobians only if needed
-        if (H) {
-            *H = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Similarity3>(
-                [&](const gtsam::Similarity3 &s1) {
-#if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-                    return Similarity3::Logmap((s1 * sim3_2_inverse_).inverse() * measured_);
-#else
-                    return Similarity3::Logmap(measured_inverse_ * (s1 * sim3_2_inverse_));
-#endif
-                },
-                sim3_1, 1e-5);
-        }
-
-        // Log map to get minimal 7D error representation
-        return Similarity3::Logmap(errorSim3);
+        return error;
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
@@ -389,7 +330,7 @@ class BetweenFactorSimilarity3InverseOnlyS1
 
 
 
-// Custom version of BetweenFactor<Similarity3> with autodifferencing for inverse error. Only s2 is optimized
+// Custom version of BetweenFactor<Similarity3> with analytic Jacobians for inverse error. Only s2 is optimized
 // Assuming:
 // sim3_1 = Sc1w FIXED
 // sim3_2 = Sc2w  
@@ -415,37 +356,18 @@ class BetweenFactorSimilarity3InverseOnlyS2
 #endif
     {}
 
-    // Compute error (7D residual)
+    // Compute error (7D residual), with analytic Jacobian (see BetweenFactorSimilarity3)
     gtsam::Vector evaluateError(const gtsam::Similarity3 &sim3_2,
                                 gtsam::OptionalMatrixType H = OptionalNone) const override {
-        const gtsam::Similarity3 sim3_2_inverse = sim3_2.inverse();                                    
-        // Compute predicted relative transformation
-        const gtsam::Similarity3 predicted =
-            sim3_1_ * sim3_2_inverse; // Sc1w * Sc2w.inverse() = Sc1c2 = S12
-
-        // Compute the error in Sim3 space
+        const gtsam::Similarity3 predicted = sim3_1_ * sim3_2.inverse(); // Sc1w * Sc2w^-1 = Sc1c2
 #if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-        // For BetweenFactorSimilarity3Inverse, use predicted.inverse() * measured_ to match backward error semantics
-        gtsam::Similarity3 errorSim3 = predicted.inverse() * measured_;
+        const gtsam::Vector7 error = Similarity3::Logmap(predicted.inverse() * measured_);
+        if (H) *H = Sim3LogmapDerivative(error) * (measured_.inverse() * sim3_1_).AdjointMap();
 #else
-        gtsam::Similarity3 errorSim3 = measured_inverse_ * predicted;
+        const gtsam::Vector7 error = Similarity3::Logmap(measured_inverse_ * predicted);
+        if (H) *H = -Sim3LogmapDerivative(error) * sim3_2.AdjointMap();
 #endif
-
-        // Compute Jacobians only if needed
-        if (H) {
-            *H = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Similarity3>(
-                [&](const gtsam::Similarity3 &s2) {
-#if SIM3_FACTOR_REVERSE_ERROR_DIRECTION
-                    return Similarity3::Logmap((sim3_1_ * s2.inverse()).inverse() * measured_);
-#else
-                    return Similarity3::Logmap(measured_inverse_ * (sim3_1_ * s2.inverse()));
-#endif
-                },
-                sim3_2, 1e-5);
-        }
-
-        // Log map to get minimal 7D error representation
-        return Similarity3::Logmap(errorSim3);
+        return error;
     }
 
     virtual gtsam::NonlinearFactor::shared_ptr clone() const override {
