@@ -150,13 +150,13 @@ if [[ $version != *"darwin"* ]]; then
             cmake \
             suitesparse \
             lapack \
-            libtiff zlib jpeg eigen tbb glew libpng \
-            x264 ffmpeg \
+            libtiff zlib libjpeg-turbo eigen tbb glew libpng \
+            x264 "ffmpeg>=6,<8" libva \
             freetype cairo \
             pygobject gtk2 gtk3 glib xorg-xorgproto \
             libwebp expat \
             compilers gcc_linux-64 gxx_linux-64 tbb tbb-devel \
-            boost openblas
+            boost libboost-devel openblas
     fi
 else
     brew install pkg-config 
