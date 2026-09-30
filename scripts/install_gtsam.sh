@@ -145,12 +145,41 @@ if [ ! -d gtsam_local ]; then
 fi
 cd gtsam_local
 make_buid_dir
+GTSAM_INSTALL_DIR="$(pwd -P)/install"
 GTSAM_CONFIG_FILE="install/lib/cmake/GTSAM/GTSAMConfig.cmake"
 TARGET_GTSAM_LIB="install/lib/libgtsam.so"
 if [[ "$OSTYPE" == darwin* ]]; then
     TARGET_GTSAM_LIB="install/lib/libgtsam.dylib"
 fi
-if [[ ! -f "$TARGET_GTSAM_LIB" || ! -f "$GTSAM_CONFIG_FILE" ]]; then
+
+# Print the (physical) directory of the libgtsam that a gtsam python extension module loads.
+function linked_libgtsam_dir(){
+    local lib
+    if [[ "$OSTYPE" == darwin* ]]; then
+        lib=$(otool -L "$1" 2>/dev/null | awk '/libgtsam\./ {print $1; exit}')
+    else
+        lib=$(ldd "$1" 2>/dev/null | awk '/libgtsam\.so/ {print $3; exit}')
+    fi
+    if [[ -n "$lib" && -d "$(dirname "$lib")" ]]; then
+        (cd "$(dirname "$lib")" && pwd -P)
+    fi
+}
+
+# The gtsam python module must load the *installed* libgtsam, the same one that gtsam_factors
+# and the C++ core link. `make python-install` pip-installs from the build tree, so the build must
+# use the install paths (CMAKE_BUILD_WITH_INSTALL_RPATH below); otherwise the build-tree libgtsam
+# is loaded as well and two copies of GTSAM end up in the same process.
+# Rebuild if the library is missing or the build-tree python module was built the old way.
+BUILD_GTSAM_PY_MODULE=$(ls build/python/gtsam/gtsam*.so 2>/dev/null | head -1)
+NEED_GTSAM_BUILD=false
+if [[ ! -f "$TARGET_GTSAM_LIB" || ! -f "$GTSAM_CONFIG_FILE" || -z "$BUILD_GTSAM_PY_MODULE" ]]; then
+    NEED_GTSAM_BUILD=true
+elif [[ "$(linked_libgtsam_dir "$BUILD_GTSAM_PY_MODULE")" != "$GTSAM_INSTALL_DIR/lib" ]]; then
+    echo "The gtsam python module in build/ does not link $GTSAM_INSTALL_DIR/lib: rebuilding GTSAM"
+    NEED_GTSAM_BUILD=true
+fi
+
+if [[ "$NEED_GTSAM_BUILD" == true ]]; then
 	cd build
     # NOTE: gtsam has some issues when compiling with march=native option!
     # https://groups.google.com/g/gtsam-users/c/jdySXchYVQg
@@ -167,23 +196,35 @@ if [[ ! -f "$TARGET_GTSAM_LIB" || ! -f "$GTSAM_CONFIG_FILE" ]]; then
     if [[ "$OSTYPE" == darwin* ]]; then
         GTSAM_OPTIONS+=" -DGTSAM_WITH_TBB=OFF"
     fi
+    # Build with the install paths (install names on macOS, RPATH on Linux), so that the python
+    # module installed from the build tree loads the installed libgtsam (see above).
+    GTSAM_OPTIONS+=" -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH=$GTSAM_INSTALL_DIR/lib -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
     echo GTSAM_OPTIONS: $GTSAM_OPTIONS
-    cmake .. -DCMAKE_INSTALL_PREFIX="`pwd`/../install" -DCMAKE_BUILD_TYPE=Release $GTSAM_OPTIONS $EXTERNAL_OPTIONS $MAC_OPTIONS || { print_red "Error: GTSAM cmake configure failed"; exit 1; }
+    cmake .. -DCMAKE_INSTALL_PREFIX="$GTSAM_INSTALL_DIR" -DCMAKE_BUILD_TYPE=Release $GTSAM_OPTIONS $EXTERNAL_OPTIONS $MAC_OPTIONS || { print_red "Error: GTSAM cmake configure failed"; exit 1; }
 	make -j $NUM_CORES || { print_red "Error: GTSAM build failed"; exit 1; }
     make install || { print_red "Error: GTSAM install failed"; exit 1; }
     cd ..
 fi
 
-# Install the gtsam python package into $PYTHON_EXE unless it already has this version.
-# This runs even when the C++ library is already built, so that a recreated python
-# environment gets the package back. A different gtsam (e.g. a pip wheel) is replaced.
+# Install the gtsam python package into $PYTHON_EXE unless it already has this version and
+# loads the installed libgtsam. This runs even when the C++ library is already built, so that a
+# recreated python environment gets the package back. A different gtsam (e.g. a pip wheel) is replaced.
+function installed_gtsam_py_module(){
+    $PYTHON_EXE -c "import gtsam, glob, os; print(glob.glob(os.path.join(os.path.dirname(gtsam.__file__), 'gtsam*.so'))[0])" 2>/dev/null
+}
 INSTALLED_GTSAM_PY_VERSION=$($PYTHON_EXE -c "import gtsam, importlib.metadata as m; print(m.version('gtsam'))" 2>/dev/null)
-if [[ "$INSTALLED_GTSAM_PY_VERSION" != "$GTSAM_TAG" ]]; then
-    echo "Installing gtsam python package (found: '${INSTALLED_GTSAM_PY_VERSION:-none}', expected: $GTSAM_TAG)"
+INSTALLED_GTSAM_PY_LIB_DIR=$(linked_libgtsam_dir "$(installed_gtsam_py_module)")
+if [[ "$INSTALLED_GTSAM_PY_VERSION" != "$GTSAM_TAG" || "$INSTALLED_GTSAM_PY_LIB_DIR" != "$GTSAM_INSTALL_DIR/lib" ]]; then
+    echo "Installing gtsam python package (found: '${INSTALLED_GTSAM_PY_VERSION:-none}' linking '${INSTALLED_GTSAM_PY_LIB_DIR:-none}', expected: $GTSAM_TAG linking $GTSAM_INSTALL_DIR/lib)"
     ( cd build && make python-install ) || { print_red "Error: GTSAM python install failed"; exit 1; }
 fi
 if ! $PYTHON_EXE -c "import gtsam" ; then
     print_red "Error: 'import gtsam' fails with $PYTHON_EXE"
+    exit 1
+fi
+INSTALLED_GTSAM_PY_LIB_DIR=$(linked_libgtsam_dir "$(installed_gtsam_py_module)")
+if [[ "$INSTALLED_GTSAM_PY_LIB_DIR" != "$GTSAM_INSTALL_DIR/lib" ]]; then
+    print_red "Error: the gtsam python module loads libgtsam from '$INSTALLED_GTSAM_PY_LIB_DIR' instead of $GTSAM_INSTALL_DIR/lib"
     exit 1
 fi
 
