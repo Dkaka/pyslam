@@ -9,9 +9,11 @@ if [ ! -d $1 ]; then
 fi
 }
 
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+# In a conda or pixi environment the environment provides suitesparse and eigen: use the system
+# packages only otherwise (a system eigen would differ from the environment's one used by the C++ core).
+if [[ "$OSTYPE" == "linux-gnu"* ]] && [[ -z "$CONDA_PREFIX" ]] && [[ -z "$PIXI_PROJECT_NAME" ]]; then
     sudo apt-get install -y libsuitesparse-dev libeigen3-dev python3-dev
-fi   
+fi
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     version=$(lsb_release -a 2>&1)  # ubuntu version
@@ -59,8 +61,9 @@ if [[ "$PYTHON_EXE" == *".pixi"* ]]; then
     echo "Detected pixi environment at: $PIXI_ENV_PREFIX"
 fi
 
-if [ "$CONDA_INSTALLED" = true ]; then
-    # NOTE: these are the "system" packages that are needed within conda to build opencv from source
+if [ "$CONDA_INSTALLED" = true ] && [ -n "$CONDA_PREFIX" ] && [ ! -f "$CONDA_PREFIX/include/suitesparse/cholmod.h" ]; then
+    # NOTE: these are the "system" packages that are needed within conda to build opencv from source.
+    # Install only when missing: re-solving the environment can replace pip-installed packages (e.g. numpy).
     conda install -y -c conda-forge suitesparse 
 fi
 
@@ -170,7 +173,12 @@ echo "BUILD_TYPE: $BUILD_TYPE"
 
 make_dir build
 cd build
-cmake .. $EXTERNAL_OPTIONS $MAC_OPTIONS $LINUX_OPTIONS -DCMAKE_BUILD_TYPE=$BUILD_TYPE
-make -j 8
+cmake .. $EXTERNAL_OPTIONS $MAC_OPTIONS $LINUX_OPTIONS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || { echo "Error: g2opy cmake configure failed"; exit 1; }
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    NUM_CORES=$(sysctl -n hw.ncpu)
+else
+    NUM_CORES=$(nproc)
+fi
+make -j $NUM_CORES || { echo "Error: g2opy build failed"; exit 1; }
 
 cd ..
