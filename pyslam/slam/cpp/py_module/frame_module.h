@@ -98,13 +98,11 @@ class PointsProxyIterator {
     PointsProxyIterator(pyslam::Frame &frame, size_t index) : frame_(frame), index_(index) {}
 
     py::object next() {
-        size_t size = frame_.points.size();
-
-        if (index_ >= size) {
+        if (index_ >= frame_.points_size()) {
             throw py::stop_iteration();
         }
 
-        auto p = frame_.points[index_];
+        auto p = frame_.get_point_match(static_cast<int>(index_));
         py::object result;
         if (p && is_valid_mappoint(p)) {
             result = py::cast(p);
@@ -124,11 +122,15 @@ class PointsProxyIterator {
 // This allows to assign: frame.points[idx] = mp or frame.points[idx] = None
 class PointsProxy {
   public:
-    constexpr static bool use_lock = false;
+    // Use the frame's locked accessors: a keyframe's points can be modified by local mapping or
+    // loop closing while Python reads them (e.g. the relocalizer reads kf.points[i]), and copying a
+    // shared_ptr out of an element that another thread is overwriting corrupts its reference count.
+    constexpr static bool use_lock = true;
 
     PointsProxy(pyslam::Frame &frame) : frame_(frame) {}
 
     py::object getitem(int idx) {
+        check_index(idx);
         if constexpr (use_lock) {
             auto p = frame_.get_point_match(idx);
             if (p && is_valid_mappoint(p)) {
@@ -144,6 +146,7 @@ class PointsProxy {
     }
 
     void setitem(int idx, py::object value) {
+        check_index(idx);
         if (value.is_none()) {
             if constexpr (use_lock) {
                 frame_.set_point_match(nullptr, idx);
@@ -162,9 +165,18 @@ class PointsProxy {
 
     size_t size() const {
         if constexpr (use_lock) {
-            return frame_.get_points().size();
+            return frame_.points_size();
         } else {
             return frame_.points.size();
+        }
+    }
+
+    // Out-of-range indices raise IndexError, as for a Python list (negative indices are not supported).
+    void check_index(int idx) const {
+        const size_t n = size();
+        if (idx < 0 || static_cast<size_t>(idx) >= n) {
+            throw py::index_error("Frame.points index " + std::to_string(idx) +
+                                  " out of range [0, " + std::to_string(n) + ")");
         }
     }
 
