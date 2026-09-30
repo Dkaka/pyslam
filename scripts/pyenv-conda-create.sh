@@ -51,12 +51,25 @@ conda config --set channel_priority strict
 
 conda update conda -y
 
+# Use the libmamba solver for the (large) solves below: the classic solver can take tens of minutes.
+# It is conda's default since 23.10, but older installs or a `solver: classic` in ~/.condarc still use
+# the classic one. The option is passed per command, so the user's conda configuration is not changed.
+CONDA_SOLVER_OPTS=""
+if ! conda list -n base 2>/dev/null | grep -qE "^conda-libmamba-solver "; then
+    conda install -n base -y conda-libmamba-solver || print_yellow "WARNING: could not install conda-libmamba-solver"
+fi
+if conda list -n base 2>/dev/null | grep -qE "^conda-libmamba-solver " && conda create --help 2>/dev/null | grep -q -- "--solver"; then
+    CONDA_SOLVER_OPTS="--solver=libmamba"
+else
+    print_yellow "WARNING: the libmamba solver is not available: the environment solve may be slow"
+fi
+
 
 if conda env list | grep -E "^[[:space:]]*$ENV_NAME[[:space:]]" > /dev/null; then
     print_yellow "Conda environment $ENV_NAME already exists."
 else 
     print_blue "Creating conda virtual environment $ENV_NAME with python version $PYSLAM_PYTHON_VERSION"
-    conda create -yn "$ENV_NAME" python="$PYSLAM_PYTHON_VERSION"
+    conda create $CONDA_SOLVER_OPTS -yn "$ENV_NAME" python="$PYSLAM_PYTHON_VERSION" || { print_red "ERROR: conda create failed"; exit 1; }
 fi
 
 # on first run
@@ -79,14 +92,14 @@ ensure_pip "$PYTHON_EXE" || exit 1
 # NOTE: these are the "system" packages that are needed within conda to build code from source
 if [[ "$OSTYPE" == darwin* ]]; then
     # macOS: use clang from Xcode; avoid Linux-only packages
-    conda install -y -c conda-forge \
+    conda install $CONDA_SOLVER_OPTS -y -c conda-forge \
         pkg-config cmake "eigen=5.0.1" suitesparse lapack openblas \
         tbb tbb-devel libpng libtiff zlib libjpeg-turbo freetype \
         ffmpeg glew glfw boost \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        pyside6 "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 "pytorch>=2.12" torchvision faiss-cpu "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 else
-    conda install -y -c conda-forge \
+    conda install $CONDA_SOLVER_OPTS -y -c conda-forge \
         pkg-config \
         glew \
         cmake \
@@ -101,7 +114,7 @@ else
         compilers gcc_linux-64 gxx_linux-64 tbb tbb-devel \
         boost libboost-devel openblas \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        pyside6 "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 faiss-cpu "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 fi
 
 # Install the Python packages after the conda packages, so that conda does not replace pip-installed
@@ -113,8 +126,15 @@ fi
 # The Qt bindings for pyqtgraph are PySide6 from conda-forge, on the same qt6-main as OpenCV, so one Qt
 # is loaded. With PyQt5 (Qt5) next to OpenCV's Qt6, macOS segfaults when both show a window (duplicate
 # Objective-C classes), and on Linux pip's PyQt5 wheel loads the system glib, which breaks conda's cv2.
+# torch is installed before `pip install -e .`, which would otherwise pull the newest torch wheel:
+# - macOS: from conda-forge (above; it includes MPS). pip's wheel bundles its own libomp, which clashes
+#   with conda's (used by numpy/OpenBLAS and suitesparse) and aborts with "OMP: Error #15".
+# - Linux: pip wheels matching the GPU (see install_pip3_torch.sh); the newest ones drop older GPUs.
 "$PYTHON_EXE" -m pip install --upgrade pip setuptools wheel build || exit 1
+"$SCRIPTS_DIR"/install_pip3_torch.sh || { print_red "ERROR: torch installation failed"; exit 1; }
 "$PYTHON_EXE" -m pip install -e . || { print_red "ERROR: pip install -e . failed"; exit 1; }
+# Fail early on conflicting native runtimes (e.g. two OpenMP libraries) rather than at the first run.
+"$PYTHON_EXE" -c "import numpy, cv2, torch" || { print_red "ERROR: 'import numpy, cv2, torch' fails in the new environment"; exit 1; }
 
 cd "$STARTING_DIR"
 
