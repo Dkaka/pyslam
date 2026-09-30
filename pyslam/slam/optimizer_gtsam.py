@@ -970,7 +970,7 @@ def local_bundle_adjustment(
         keyframes_ref = []
 
     if abort_flag is None:
-        abort_flag = gtsam.Flag()
+        abort_flag = g2o.Flag()
 
     graph = gtsam.NonlinearFactorGraph()
     initial_estimates = gtsam.Values()
