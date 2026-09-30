@@ -124,7 +124,7 @@ std::tuple<std::vector<int>, std::vector<int>, int> ProjectionMatcher::search_fr
             continue;
 #if 0
         // Check if point is visible  (disabled in contiguous-frame matching)
-        const auto PO = p_ref->pt() - Ow;
+        const Eigen::Vector3d PO = p_ref->pt() - Ow; // NOTE: not auto: pt() returns by value and an Eigen expression would dangle
         const float dist3D = PO.norm();
         if (dist3D < p_ref->min_distance() || dist3D > p_ref->max_distance()) {
             continue;
@@ -299,7 +299,7 @@ ProjectionMatcher::search_keyframe_by_projection(
         if (!f_cur->is_in_image<float>(proj_uv, depth))
             continue;
 
-        const auto PO = p_ref->pt() - Ow;
+        const Eigen::Vector3d PO = p_ref->pt() - Ow; // NOTE: not auto: pt() returns by value and an Eigen expression would dangle
         const float dist3D = PO.norm();
         if (dist3D < p_ref->min_distance() || dist3D > p_ref->max_distance()) {
             continue;
@@ -437,7 +437,7 @@ std::pair<int, std::vector<int>> ProjectionMatcher::search_map_by_projection(
         if (depth > far_points_threshold)
             continue;
 
-        const auto PO = p->pt() - f_cur_Ow;
+        const Eigen::Vector3d PO = p->pt() - f_cur_Ow; // NOTE: not auto: pt() returns by value and an Eigen expression would dangle
         const float dist3D = PO.norm();
         if (dist3D < p->min_distance() || dist3D > p->max_distance()) {
             continue;
@@ -717,7 +717,7 @@ int ProjectionMatcher::search_and_fuse(const std::vector<MapPointPtr> &points,
             continue;
         }
 
-        const auto PO = p->pt() - kf_Ow;
+        const Eigen::Vector3d PO = p->pt() - kf_Ow; // NOTE: not auto: pt() returns by value and an Eigen expression would dangle
         const float dist3D = PO.norm();
         if (dist3D < p->min_distance() || dist3D > p->max_distance()) {
             continue;
@@ -1001,7 +1001,7 @@ ProjectionMatcher::search_by_sim3(const KeyFramePtr &kf1, const KeyFramePtr &kf2
         if (dist3D2 < mp1->min_distance() || dist3D2 > mp1->max_distance()) {
             continue;
         }
-        const auto normal2 = mp1->get_normal().cast<float>();
+        const Eigen::Vector3f normal2 = mp1->get_normal().cast<float>();
 #if 0        
         const float cos_view2 = pt1_c2.dot(normal2) / dist3D2;
         if (cos_view2 < Parameters::kViewingCosLimitForPoint) {
@@ -1061,7 +1061,7 @@ ProjectionMatcher::search_by_sim3(const KeyFramePtr &kf1, const KeyFramePtr &kf2
         if (dist3D1 < mp2->min_distance() || dist3D1 > mp2->max_distance()) {
             continue;
         }
-        const auto normal1 = mp2->get_normal().cast<float>();
+        const Eigen::Vector3f normal1 = mp2->get_normal().cast<float>();
 #if 0        
         const float cos_view1 = pt2_c1.dot(normal1) / dist3D1;
         if (cos_view1 < Parameters::kViewingCosLimitForPoint) {
