@@ -46,7 +46,8 @@ This is a list of the key classes and helpers.
 ### **PriorFactorSimilarity3**
 - Applies a **Similarity3** prior to penalize deviation from a given transformation.
 - Defines an error function using the **Logmap** of the transformation error.
-- Computes Jacobians for optimization using numerical derivatives.
+- Analytic Jacobian: the inverse right Jacobian of Sim(3), `J_r^-1(e)` (`Sim3LogmapDerivative`), evaluated exactly via a matrix exponential and robust to arbitrary scale.
+- Kept instead of GTSAM's `PriorFactor<Similarity3>`, which uses an identity Jacobian because `Similarity3` has no `Local()` Jacobian (borglab/gtsam#1750).
 
 ### **PriorFactorSimilarity3ScaleOnly**
 - A variant of the `PriorFactorSimilarity3`, which penalizes only the scale difference in a **Similarity3** transformation.
@@ -55,26 +56,25 @@ This is a list of the key classes and helpers.
 ### **SimResectioningFactor**
 - A custom factor for optimizing the similarity transformation (Sim3) using 2D-3D resectioning.
 - Projects the transformed 3D point using a camera calibration matrix, and compares it with the observed 2D point.
+- Analytic Jacobian.
 - **Weight**: Similar to other resectioning factors, a weight can be applied to enable/disable this factor.
 
 ### **SimInvResectioningFactor**
 - Similar to `SimResectioningFactor`, but it computes the error with the inverse of the similarity transformation.
 - Useful for scenarios where the transformation needs to be inverted.
+- Analytic Jacobian.
 - **Weight**: A weight can be applied to control the factor's influence on the optimization process.
 
-### **BetweenFactorSimilarity3**
-- A factor that computes the error between two **Similarity3** poses (i.e., relative transformation between two keyframes).
-- The error is the **Logmap** of the relative transformation between two `Similarity3` poses.
+### **BetweenFactorSimilarity3**, **BetweenFactorSimilarity3Inverse** (+ `OnlyS1` / `OnlyS2`)
+- Factors that compute the error between two **Similarity3** poses (i.e., relative transformation between two keyframes), for `Swc` and `Scw` (inverse) conventions; the `OnlyS1`/`OnlyS2` variants keep one pose fixed.
+- The error is the **Logmap** of the relative transformation error.
+- Analytic Jacobians (`J_r^-1(e)` times the appropriate adjoints).
 
-### **Numerical Autodiff Helpers**
-- Provides helper functions for **numerical derivatives** and **autodifferentiation** (autodiff) for the error functions of **Similarity3** factors.
-- The function `numericalDerivative11General` is used to compute Jacobians for any factor, with a specialization for **Similarity3** to **Vector2**. 
-- These autodiff helpers facilitate the efficient computation of Jacobians, ensuring correct gradient propagation for optimization.
+All Jacobians are analytic; `test/gtsam/test_gtsam_factors_jacobians.py` checks them against finite differences.
 
-## Utility Functions
+## Similarity3 in Values
 
-- **`insertSimilarity3`**: Inserts a **Similarity3** transformation into GTSAM's `Values` container.
-- **`getSimilarity3`**: Retrieves a **Similarity3** transformation from `Values`.
+With GTSAM >= 4.3, `Similarity3` can be stored directly in `Values` from Python (`values.insert(key, sim3)`, `values.atSimilarity3(key)`).
 
 ## Serialization and Cloning
 - Each factor includes serialization support for saving/loading factor data.
