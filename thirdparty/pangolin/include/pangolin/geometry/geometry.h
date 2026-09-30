@@ -28,6 +28,7 @@
 #ifndef PANGOLIN_GEOMETRY_H
 #define PANGOLIN_GEOMETRY_H
 
+#include <cstdint>
 #include <map>
 #include <unordered_map>
 #include <vector>
