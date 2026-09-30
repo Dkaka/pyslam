@@ -20,7 +20,6 @@
 #pragma once
 
 
-#include "numerical_derivative.h"
 
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <gtsam/linear/NoiseModel.h>
@@ -44,7 +43,6 @@ using namespace gtsam::noiseModel;
 using symbol_shorthand::X;
 
 
-#define USE_ANALYTICAL_JACOBIAN_FOR_TCW_RESECTION 1
 
 namespace gtsam_factors {
 
@@ -112,7 +110,6 @@ public:
         : Base(model, key), fx_(calib.fx()), fy_(calib.fy()), cx_(calib.px()), cy_(calib.py()), 
             P_(world_P), p_(measured_p) {}
 
-#if USE_ANALYTICAL_JACOBIAN_FOR_TCW_RESECTION
     Vector evaluateError(const gtsam::Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
         try {
             if (weight_ <= std::numeric_limits<double>::epsilon()) {
@@ -158,44 +155,6 @@ public:
             return gtsam::Vector::Zero(2);
         }
     }
-#else 
-    Vector evaluateError(const Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
-        auto computeError = [&](const Pose3& Tcw) {
-            const gtsam::Matrix3 Rcw = Tcw.rotation().matrix();
-            const gtsam::Vector3 tcw = Tcw.translation();            
-            const gtsam::Vector3 Pc = Rcw * P_ + tcw;
-            const gtsam::Vector2 error = camProject(Pc) - p_;
-            return error;
-        };
-        
-        try {
-            if (weight_ <= std::numeric_limits<double>::epsilon()) {
-                if (H) *H = Matrix::Zero(2,6);
-                return Vector::Zero(2);
-            } else {
-                const Vector error(computeError(Tcw));
-                // Compute Jacobians if required
-                if (H) {    
-                    *H = weight_ * gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Pose3>(computeError, Tcw, 1e-5);
-                }
-                return weight_ * error;
-            }
-        } catch( std::exception& e) {
-            if (H) *H = gtsam::Matrix::Zero(2,6);
-            // print in red
-            std::cerr << "\x1b[31m [ResectioningFactorTcw]: " << e.what() << "\x1b[0m" << std::endl;
-            return gtsam::Vector::Zero(2);
-        }
-    }
-#endif
-
-    Vector2 camProject(const gtsam::Vector3 &Pc) const {
-        const double invz = 1.0 / Pc[2];
-        const double u = fx_ * Pc[0] * invz + cx_;
-        const double v = fy_ * Pc[1] * invz + cy_;
-        return Vector2(u, v);
-    }
-      
 
     void setWeight(double weight) { assert(weight > 0.0); weight_ = weight; }
     double getWeight() const { return weight_; }
@@ -268,7 +227,6 @@ public:
         : Base(model, key), fx_(calib.fx()), fy_(calib.fy()), cx_(calib.px()), cy_(calib.py()), 
           bf_(calib.baseline()*calib.fx()), P_(world_P), p_stereo_(measured_p_stereo) {}
 
-#if USE_ANALYTICAL_JACOBIAN_FOR_TCW_RESECTION
     Vector evaluateError(const gtsam::Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
         try {
             if (weight_ <= std::numeric_limits<double>::epsilon()) {
@@ -298,7 +256,7 @@ public:
                 gtsam::Matrix33 J_proj;
                 J_proj <<
                     fx_ * invZ,       0.0, -fx_ * X * invZ2,
-                    fx_ * invZ,       0.0, -fx_ * X * invZ2 - bf_ * invZ2,
+                    fx_ * invZ,       0.0, -fx_ * X * invZ2 + bf_ * invZ2,  // d(uL - bf/Z)/dZ
                         0.0, fy_ * invZ, -fy_ * Y * invZ2;
 
                 // d(Pc) / d(Tcw)
@@ -317,46 +275,6 @@ public:
             return gtsam::Vector3::Zero();
         }
     }
-#else 
-    Vector evaluateError(const gtsam::Pose3& Tcw, gtsam::OptionalMatrixType H = OptionalNone) const override {
-        auto computeError = [&](const gtsam::Pose3& Tcw) {
-            const gtsam::Matrix3 Rcw = Tcw.rotation().matrix();
-            const gtsam::Vector3 tcw = Tcw.translation();            
-            const gtsam::Vector3 Pc = Rcw * P_ + tcw;
-            const gtsam::Vector3 error = camProject(Pc) - p_stereo_.vector();
-            return error;
-        };
-        
-        try {
-            if (weight_ <= std::numeric_limits<double>::epsilon()) {
-                if (H) *H = gtsam::Matrix::Zero(3,6);
-                return gtsam::Vector::Zero(3);
-            } else {
-                const Vector error(computeError(Tcw));
-                // Compute Jacobians if required
-                if (H) {    
-                    *H = weight_ * gtsam::numericalDerivative11<gtsam::Vector3, gtsam::Pose3>(computeError, Tcw, 1e-5);
-                }
-                return weight_ * error;
-            }
-        } catch( std::exception& e) {
-            if (H) *H = gtsam::Matrix::Zero(3,6);
-            // print in red
-            std::cerr << "\x1b[31m [ResectioningFactorTcw]: " << e.what() << "\x1b[0m" << std::endl;
-            return gtsam::Vector::Zero(3);
-        }
-    }
-#endif 
-
-    Vector3 camProject(const Vector3 &Pc) const {
-        const double invz = 1.0 / Pc[2];
-        const double uL = fx_ * Pc[0] * invz + cx_;
-        const double vL = fy_ * Pc[1] * invz + cy_;
-        const double uR = uL - bf_ * invz;        
-        Vector3 res(uL, uR, vL);
-        return res;
-    }
-        
 
     void setWeight(double weight) { assert(weight > 0.0); weight_ = weight; }
     double getWeight() const { return weight_; }
@@ -367,10 +285,19 @@ public:
 // =====================================================================================================================
 
 
+// Jacobian of the perspective division uv = p.head<2>() / p[2] w.r.t. p (homogeneous image point).
+inline gtsam::Matrix23 projectionJacobian(const gtsam::Vector3 &p) {
+    const double z_inv = 1.0 / p[2];
+    gtsam::Matrix23 J;
+    J << z_inv, 0.0, -p[0] * z_inv * z_inv,
+         0.0, z_inv, -p[1] * z_inv * z_inv;
+    return J;
+}
+
 // Used by optimizer_gtsam.optimize_sim3()
 class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3> {
     private:
-        const Cal3_S2& calib_;  // Camera intrinsics
+        const Cal3_S2 calib_;   // Camera intrinsics (stored by value)
         const Point2 uv_;       // Observed 2D point
         const Point3 P_;        // 3D point
         double weight_ = 1.0;   // Weight
@@ -386,22 +313,23 @@ class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3
     
         gtsam::Vector evaluateError(const gtsam::Similarity3& sim3,
                                     gtsam::OptionalMatrixType H = OptionalNone) const override {
-            auto computeError = [this](const gtsam::Similarity3& sim) {
-                const gtsam::Matrix3 R = sim.rotation().matrix();
-                const gtsam::Vector3 t = sim.translation();
-                const double s = sim.scale();
-                const gtsam::Vector3 transformed_P = s * (R * P_) + t;
-                const gtsam::Vector3 projected = calib_.K() * transformed_P;
-                const gtsam::Point2 uv = projected.head<2>() / projected[2];
-                const gtsam::Vector2 error = uv - uv_;
-                return error;
-            };
-    
-            const gtsam::Vector2 error = weight_ * computeError(sim3);
-    
-            // Compute Jacobians if required
-            if (H) {    
-                *H = weight_ * gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Similarity3>(computeError, sim3, 1e-5);
+            // Q = s * R * P + t, projected with K.
+            // With the right perturbation sim * Exp([w, u, lambda]): dR = R [w]x, dt = R u - t lambda,
+            // ds = s lambda, so dQ/d(w, u, lambda) = [-s R [P]x, R, s R P - t] (analytic Jacobian).
+            const gtsam::Matrix3 R = sim3.rotation().matrix();
+            const gtsam::Vector3 t = sim3.translation();
+            const double s = sim3.scale();
+            const gtsam::Vector3 sRP = s * (R * P_);
+            const gtsam::Vector3 Q = sRP + t;
+            const gtsam::Matrix3 K = calib_.K();
+            const gtsam::Vector3 projected = K * Q;
+            const gtsam::Point2 uv = projected.head<2>() / projected[2];
+            const gtsam::Vector2 error = weight_ * (uv - uv_);
+
+            if (H) {
+                gtsam::Matrix37 dQ;
+                dQ << -s * R * gtsam::skewSymmetric(P_), R, sRP - t;
+                *H = weight_ * (projectionJacobian(projected) * K * dQ);
             }
             return error;
         }
@@ -423,7 +351,7 @@ class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3
     // Used by optimizer_gtsam.optimize_sim3()
     class SimInvResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3> {
     private:
-        const Cal3_S2& calib_;  // Camera intrinsics
+        const Cal3_S2 calib_;   // Camera intrinsics (stored by value)
         const Point2 uv_;       // Observed 2D pixel point
         const Point3 P_;        // 3D camera point
         double weight_ = 1.0;   // Weight    
@@ -439,28 +367,23 @@ class SimResectioningFactor : public gtsam::NoiseModelFactor1<gtsam::Similarity3
     
         gtsam::Vector evaluateError(const gtsam::Similarity3& sim3,
                                     gtsam::OptionalMatrixType H = OptionalNone) const override {
-            auto computeError = [this](const gtsam::Similarity3& sim) {
-                const gtsam::Matrix3 R = sim.rotation().matrix();
-                const gtsam::Vector3 t = sim.translation();
-                const double s = sim.scale();
-    
-                const gtsam::Matrix3 R_inv = R.transpose();
-                const double s_inv = 1.0 / s;
-                const gtsam::Vector3 t_inv = -s_inv * (R_inv * t);
-                const gtsam::Vector3 transformed_P = s_inv * (R_inv * P_) + t_inv;
-                const gtsam::Vector3 projected = calib_.K() * transformed_P;
-                const gtsam::Point2 uv = projected.head<2>() / projected[2];
-                const gtsam::Vector2 error = uv - uv_;
-                return error;
-            };   
-    
-            const gtsam::Vector2 error = weight_ * computeError(sim3);
-    
-            // Compute Jacobians if required
+            // Q = s^-1 * R^T * (P - t) (inverse of the Sim3 action), projected with K.
+            // With the right perturbation sim * Exp([w, u, lambda]) (dR = R [w]x, dt = R u - t lambda,
+            // ds = s lambda): dQ/d(w, u, lambda) = [[Q]x, -I / s, R^T (2 t - P) / s] (analytic Jacobian).
+            const gtsam::Matrix3 R = sim3.rotation().matrix();
+            const gtsam::Vector3 t = sim3.translation();
+            const double s_inv = 1.0 / sim3.scale();
+            const gtsam::Vector3 Q = s_inv * (R.transpose() * (P_ - t));
+            const gtsam::Matrix3 K = calib_.K();
+            const gtsam::Vector3 projected = K * Q;
+            const gtsam::Point2 uv = projected.head<2>() / projected[2];
+            const gtsam::Vector2 error = weight_ * (uv - uv_);
+
             if (H) {
-                *H = weight_ * gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Similarity3>(computeError, sim3, 1e-5);
+                gtsam::Matrix37 dQ;
+                dQ << gtsam::skewSymmetric(Q), -s_inv * gtsam::I_3x3, s_inv * (R.transpose() * (2.0 * t - P_));
+                *H = weight_ * (projectionJacobian(projected) * K * dQ);
             }
-    
             return error;
         }
     
