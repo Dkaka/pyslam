@@ -25,8 +25,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "numerical_derivative.h"
-#include "numerical_derivative_py.h"
 #include "optimizers.h"
 #include "resectioning.h"
 #include "similarity.h"
@@ -73,57 +71,6 @@ PYBIND11_MODULE(gtsam_factors, m) {
                std::shared_ptr<gtsam::NoiseModelFactor2<gtsam::Similarity3, gtsam::Similarity3>>>(
         m, "NoiseModelFactor2Similarity3")
         .def("print", &gtsam::NoiseModelFactor2<gtsam::Similarity3, gtsam::Similarity3>::print);
-
-    // NOTE: This commented block does not work. We need to specialize the template for each type we
-    // are interested
-    //       as it is done for Similarity3 in numerical_derivative11_v2_sim3 and the other following
-    //       functions.
-    // m.def("numerical_derivative11",
-    //     [](py::function py_func, const auto& x, double delta = 1e-5) -> Eigen::MatrixXd {
-    //         // Explicitly define the lambda signature
-    //         return numericalDerivative11_Any(py_func, x, delta);
-    //     },
-    //     py::arg("func"), py::arg("x"), py::arg("delta") = 1e-5,
-    //     "Compute numerical derivative of a function mapping any type");
-
-    // Specialization of numericalDerivative11 for Pose3 -> Vector2
-    m.def(
-        "numerical_derivative11_v2_pose3",
-        [](py::function py_func, const Pose3 &x, double delta = 1e-5) -> Eigen::MatrixXd {
-            // Explicitly define the lambda signature
-            return gtsam_factors::numericalDerivative11_V2_Pose3(py_func, x, delta);
-        },
-        py::arg("func"), py::arg("x"), py::arg("delta") = 1e-5,
-        "Compute numerical derivative of a function mapping Pose3 to Vector2");
-
-    m.def(
-        "numerical_derivative11_v3_pose3",
-        [](py::function py_func, const Pose3 &x, double delta = 1e-5) -> Eigen::MatrixXd {
-            // Explicitly define the lambda signature
-            return gtsam_factors::numericalDerivative11_V3_Pose3(py_func, x, delta);
-        },
-        py::arg("func"), py::arg("x"), py::arg("delta") = 1e-5,
-        "Compute numerical derivative of a function mapping Pose3 to Vector3");
-
-    // Specialization of numericalDerivative11 for Similarity3 -> Vector2
-    m.def(
-        "numerical_derivative11_v2_sim3",
-        [](py::function py_func, const Similarity3 &x, double delta = 1e-5) -> Eigen::MatrixXd {
-            // Explicitly define the lambda signature
-            return gtsam_factors::numericalDerivative11_V2_Sim3(py_func, x, delta);
-        },
-        py::arg("func"), py::arg("x"), py::arg("delta") = 1e-5,
-        "Compute numerical derivative of a function mapping Similarity3 to Vector2");
-
-    // Specialization of numericalDerivative11 for Similarity3 -> Vector3
-    m.def(
-        "numerical_derivative11_v3_sim3",
-        [](py::function py_func, const Similarity3 &x, double delta = 1e-5) -> Eigen::MatrixXd {
-            // Explicitly define the lambda signature
-            return gtsam_factors::numericalDerivative11_V3_Sim3(py_func, x, delta);
-        },
-        py::arg("func"), py::arg("x"), py::arg("delta") = 1e-5,
-        "Compute numerical derivative of a function mapping Similarity3 to Vector3");
 
     py::class_<gtsam_factors::SwitchableRobustNoiseModel,
                std::shared_ptr<gtsam_factors::SwitchableRobustNoiseModel>, noiseModel::Base>(

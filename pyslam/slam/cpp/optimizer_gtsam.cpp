@@ -44,7 +44,6 @@
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/slam/PriorFactor.h>
 
-#include <gtsam_factors/numerical_derivative.h>
 #include <gtsam_factors/optimizers.h>
 #include <gtsam_factors/resectioning.h>
 #include <gtsam_factors/similarity.h>

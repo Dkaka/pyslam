@@ -22,7 +22,6 @@ import numpy as np
 import sys
 import time
 
-import platform
 import threading
 import multiprocessing as mp
 import traceback
@@ -439,152 +438,6 @@ def global_bundle_adjustment_map(
 # ------------------------------------------------------------------------------------------
 
 
-class ResectioningMonoFactor:
-    def __init__(
-        self,
-        noise_model: gtsam.noiseModel.Base,
-        pose_key: int,
-        calib: gtsam.Cal3_S2,
-        p: gtsam.Point2,
-        P: gtsam.Point3,
-        weight: float = 1.0,  # Initial weight
-    ):
-        self.weight = weight
-        self.factor = gtsam.CustomFactor(noise_model, gtsam.KeyVector([pose_key]), self.error_func)
-        self.pose_key = pose_key
-        self.calib = calib
-        self.p = p
-        self.P = P
-
-    def get_factor(self):
-        """Returns the underlying GTSAM factor."""
-        return self.factor
-
-    def get_weight(self):
-        return self.weight
-
-    def set_weight(self, new_weight: float):
-        self.weight = new_weight
-
-    def error_func(
-        self, this: gtsam.CustomFactor, v: gtsam.Values, H: list[np.ndarray]
-    ) -> np.ndarray:
-        try:
-            pose = v.atPose3(self.pose_key)
-            camera = gtsam.PinholeCameraCal3_S2(pose, self.calib)
-
-            # Compute the reprojection error
-            if H is None or len(H) == 0:
-                return self.weight * (camera.project(self.P) - self.p)
-
-            # Compute Jacobians if required
-            Dpose = np.zeros((2, 6), order="F")
-            Dpoint = np.zeros((2, 3), order="F")
-            Dcal = np.zeros((2, 5), order="F")
-            result = camera.project(self.P, Dpose, Dpoint, Dcal) - self.p
-
-            # Apply weight to error and Jacobians
-            H[0] = self.weight * Dpose
-            if len(H) > 1:
-                H[1] = self.weight * Dpoint
-
-            return self.weight * result  # Scale the error
-        except Exception as e:
-            Printer.red(f"[resectioning_mono_factor]: Exception: {e}")
-            result = np.zeros((2, 1), order="F")
-            if H is not None and len(H) > 0:
-                H[0] = np.zeros((2, 6), order="F")
-                if len(H) > 1:
-                    H[1] = np.zeros((2, 3), order="F")
-        return result
-
-
-class ResectioningStereoFactor:
-    def __init__(
-        self,
-        noise_model: gtsam.noiseModel.Base,
-        pose_key: int,
-        calib: gtsam.Cal3_S2Stereo,
-        p: gtsam.StereoPoint2,
-        P: gtsam.Point3,
-        weight: float = 1.0,  # Initial weight
-    ):
-        self.weight = weight
-        self.factor = gtsam.CustomFactor(noise_model, gtsam.KeyVector([pose_key]), self.error_func)
-        self.pose_key = pose_key
-        self.calib = calib
-        self.p = p
-        self.P = P
-
-    def get_factor(self):
-        """Returns the underlying GTSAM factor."""
-        return self.factor
-
-    def get_weight(self):
-        return self.weight
-
-    def set_weight(self, new_weight: float):
-        self.weight = new_weight
-
-    def error_func(
-        self, this: gtsam.CustomFactor, v: gtsam.Values, H: list[np.ndarray]
-    ) -> np.ndarray:
-        try:
-            pose = v.atPose3(self.pose_key)
-            camera = gtsam.StereoCamera(pose, self.calib)
-            p_vec = self.p.vector()
-
-            # Compute the reprojection error
-            if H is None or len(H) == 0:
-                return self.weight * (camera.project(self.P).vector() - p_vec)
-
-            # Compute Jacobians if required
-            Dpose = np.zeros((3, 6), order="F")
-            Dpoint = np.zeros((3, 3), order="F")
-            result = camera.project2(self.P, Dpose, Dpoint).vector() - p_vec
-
-            # Apply weight to error and Jacobians
-            H[0] = self.weight * Dpose
-            if len(H) > 1:
-                H[1] = self.weight * Dpoint
-
-            return self.weight * result  # Scale the error
-        except Exception as e:
-            Printer.red(f"[resectioning_stereo_factor]: Exception: {e}")
-            result = np.zeros((3, 1), order="F")
-            if H is not None and len(H) > 0:
-                H[0] = np.zeros((3, 6), order="F")
-                if len(H) > 1:
-                    H[1] = np.zeros((3, 3), order="F")
-        return result
-
-
-def resectioning_mono_factor_py(
-    noise_model: gtsam.noiseModel.Base,
-    pose_key: int,
-    calib: gtsam.Cal3_S2,
-    p: gtsam.Point2,
-    P: gtsam.Point3,
-) -> gtsam.NonlinearFactor:
-    # host factor is the object that contains the actual gtsam factor
-    host_factor = ResectioningMonoFactor(noise_model, pose_key, calib, p, P)
-    factor = host_factor.get_factor()
-    return factor, host_factor
-
-
-def resectioning_stereo_factor_py(
-    noise_model: gtsam.noiseModel.Base,
-    pose_key: int,
-    calib: gtsam.Cal3_S2Stereo,
-    p: gtsam.StereoPoint2,
-    P: gtsam.Point3,
-) -> gtsam.NonlinearFactor:
-    # host factor is the object that contains the actual gtsam factor
-    host_factor = ResectioningStereoFactor(noise_model, pose_key, calib, p, P)
-    factor = host_factor.get_factor()
-    return factor, host_factor
-
-
 def resectioning_mono_factor(
     noise_model: gtsam.noiseModel.Base,
     pose_key: int,
@@ -671,10 +524,6 @@ class PoseOptimizerGTSAM:
 
         self.add_mono_factor = resectioning_mono_factor
         self.add_stereo_factor = resectioning_stereo_factor
-        if platform.system() == "Darwin":
-            # NOTE: Under macOS I found some interface issues with the pybindings of the resectioning factors.
-            self.add_mono_factor = resectioning_mono_factor_py
-            self.add_stereo_factor = resectioning_stereo_factor_py
 
     def add_pose_node(self):
         frame_Twc = self.frame.Twc()
@@ -900,10 +749,6 @@ class PoseOptimizerGTSAM_Tcw:
 
         self.add_mono_factor = resectioning_mono_factor_Tcw
         self.add_stereo_factor = resectioning_stereo_factor_Tcw
-        # if platform.system() == "Darwin":
-        #     # NOTE: Under macOS I found some interface issues with the pybindings of the resectioning factors.
-        #     self.add_mono_factor  = resectioning_mono_factor_py
-        #     self.add_stereo_factor  = resectioning_stereo_factor_py
 
     def add_pose_node(self):
         frame_Tcw = self.frame.Tcw()
@@ -1378,144 +1223,6 @@ def local_bundle_adjustment(
 # ------------------------------------------------------------------------------------------
 
 
-class SimResectioningFactor:
-    def __init__(
-        self,
-        sim_pose_key: int,
-        calib: gtsam.Cal3_S2,
-        p: gtsam.Point2,
-        P: gtsam.Point3,
-        noise_model: gtsam.noiseModel.Base,
-        weight: float = 1.0,  # Initial weight
-    ):
-        self.sim_pose_key = sim_pose_key
-        self.calib = calib
-        self.p = p
-        self.P = P
-        self.weight = weight
-        # Create the CustomFactor with our error function
-        self.factor = gtsam.CustomFactor(
-            noise_model, gtsam.KeyVector([sim_pose_key]), self.error_func
-        )
-
-    def get_factor(self) -> gtsam.NonlinearFactor:
-        """Returns the underlying GTSAM factor wrapped with weight management."""
-        return self.factor
-
-    def get_weight(self) -> float:
-        return self.weight
-
-    def set_weight(self, new_weight: float):
-        self.weight = new_weight
-
-    def error_func(
-        self, this: gtsam.CustomFactor, values: gtsam.Values, H: list[np.ndarray]
-    ) -> np.ndarray:
-        # Retrieve similarity transform from the values using a helper function.
-        sim3 = values.atSimilarity3(self.sim_pose_key)
-
-        def compute_error(sim: gtsam.Similarity3) -> np.ndarray:
-            R = sim.rotation().matrix()  # 3x3 rotation matrix
-            t = sim.translation()  # 3x1 translation vector
-            s = sim.scale()  # Scalar scale factor
-            # Correct transformation: P' = s * R * P + t
-            transformed_P = s * (R @ self.P) + t
-            projected = self.calib.K() @ transformed_P
-            # Normalize projection and compute residual
-            return projected[:2] / projected[2] - self.p
-
-        # Multiply the residual by the weight
-        error = self.weight * compute_error(sim3)
-
-        # If Jacobian is requested, compute and weight it
-        if H is not None:
-            H[0] = self.weight * gtsam_factors.numerical_derivative11_v2_sim3(
-                compute_error, sim3, 1e-5
-            )
-
-        return error
-
-
-class SimInvResectioningFactor:
-    def __init__(
-        self,
-        sim_pose_key: int,
-        calib: gtsam.Cal3_S2,
-        p: gtsam.Point2,
-        P: gtsam.Point3,
-        noise_model: gtsam.noiseModel.Base,
-        weight: float = 1.0,  # Initial weight
-    ):
-        self.sim_pose_key = sim_pose_key
-        self.calib = calib
-        self.p = p
-        self.P = P
-        self.weight = weight
-        self.factor = gtsam.CustomFactor(
-            noise_model, gtsam.KeyVector([sim_pose_key]), self.error_func
-        )
-
-    def get_factor(self) -> gtsam.NonlinearFactor:
-        """Returns the underlying GTSAM factor wrapped with weight management."""
-        return self.factor
-
-    def get_weight(self) -> float:
-        return self.weight
-
-    def set_weight(self, new_weight: float):
-        self.weight = new_weight
-
-    def error_func(
-        self, this: gtsam.CustomFactor, values: gtsam.Values, H: list[np.ndarray]
-    ) -> np.ndarray:
-        # Retrieve similarity transform
-        sim3 = values.atSimilarity3(self.sim_pose_key)
-
-        def compute_error(sim: gtsam.Similarity3) -> np.ndarray:
-            R = sim.rotation().matrix()  # 3x3 rotation matrix
-            t = sim.translation()  # 3x1 translation vector
-            s = sim.scale()  # Scalar scale factor
-            # Compute inverse transformation:
-            R_inv = R.T / s  # Inverse rotation scaled by 1/s
-            t_inv = -R_inv @ t  # Inverse translation
-            transformed_P = R_inv @ self.P + t_inv
-            projected = self.calib.K() @ transformed_P
-            # Normalized projection
-            return projected[:2] / projected[2] - self.p
-
-        error = self.weight * compute_error(sim3)
-
-        if H is not None:
-            H[0] = self.weight * gtsam_factors.numerical_derivative11_v2_sim3(
-                compute_error, sim3, 1e-5
-            )
-        return error
-
-
-def sim_resectioning_factor_py(
-    noise_model: gtsam.noiseModel.Base,
-    sim_pose_key: int,
-    calib: gtsam.Cal3_S2,
-    p: gtsam.Point2,
-    P: gtsam.Point3,
-) -> gtsam.NonlinearFactor:
-    host_factor = SimResectioningFactor(sim_pose_key, calib, p, P, noise_model)
-    factor = host_factor.get_factor()
-    return factor, host_factor
-
-
-def sim_inv_resectioning_factor_py(
-    noise_model: gtsam.noiseModel.Base,
-    sim_pose_key: int,
-    calib: gtsam.Cal3_S2,
-    p: gtsam.Point2,
-    P: gtsam.Point3,
-) -> gtsam.NonlinearFactor:
-    host_factor = SimInvResectioningFactor(sim_pose_key, calib, p, P, noise_model)
-    factor = host_factor.get_factor()
-    return factor, host_factor
-
-
 def sim_resectioning_factor(
     noise_model: gtsam.noiseModel.Base,
     sim_pose_key: int,
@@ -1568,10 +1275,6 @@ def optimize_sim3(
 
     sim_resectioning_factor_fn = sim_resectioning_factor
     sim_inv_resectioning_factor_fn = sim_inv_resectioning_factor
-    if platform.system() == "Darwin":
-        # NOTE: Under macOS I found some interface issues with the pybindings of the resectioning factors.
-        sim_resectioning_factor_fn = sim_resectioning_factor_py
-        sim_inv_resectioning_factor_fn = sim_inv_resectioning_factor_py
 
     # Calibration and Camera Poses
     cam1 = kf1.camera

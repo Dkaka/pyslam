@@ -121,8 +121,6 @@ pybind11_add_module(
   similarity.h
   switchable_robust_noise_model.h
   optimizers.h 
-  numerical_derivative.h 
-  numerical_derivative_py.h
   resectioning.h
   weighted_projection_factors.h
 )
@@ -137,8 +135,6 @@ target_link_libraries(gtsam_factors PRIVATE
 #   similarity.h
 #   switchable_robust_noise_model.h
 #   optimizers.h
-#   numerical_derivative.h
-#   numerical_derivative_py.h
 #   resectioning.h
 #   weighted_projection_factors.h
 #   DESTINATION include/gtsam_factors

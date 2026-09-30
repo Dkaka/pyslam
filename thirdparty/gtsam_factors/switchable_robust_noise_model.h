@@ -20,7 +20,6 @@
 
  // #define GTSAM_SLOW_BUT_CORRECT_BETWEENFACTOR  // before including gtsam
  
- #include "numerical_derivative.h"
  
  #include <gtsam/inference/Symbol.h>
  
