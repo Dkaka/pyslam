@@ -58,9 +58,22 @@ export WITH_PYTHON_INTERP_CHECK=ON  # in order to detect the correct python inte
 . "$ROOT_DIR"/cuda_config.sh
 
 
-# Install opencv_python from source with non-free modules enabled 
-INSTALL_OPENCV_FROM_SOURCE=1
-if [ $INSTALL_OPENCV_FROM_SOURCE -eq 1 ]; then
+# OpenCV: in a conda env created by pyenv-conda-create.sh, conda-forge provides it (C++ libs and cv2,
+# with contrib but without non-free SURF). Keep it: a source build here would replace conda's cv2 and
+# temporarily upgrade numpy. Set INSTALL_OPENCV_FROM_SOURCE=1 to build from source anyway (e.g. for
+# SURF or CUDA), or 0 for the pip wheels.
+PYTHON_EXE=${PYTHON_EXE:-$(get_python_exe)}
+INSTALL_OPENCV_FROM_SOURCE=${INSTALL_OPENCV_FROM_SOURCE:-auto}
+if [[ "$INSTALL_OPENCV_FROM_SOURCE" == auto ]]; then
+    if [[ -n "$CONDA_PREFIX" ]] && conda list -p "$CONDA_PREFIX" 2>/dev/null | grep -qE '^libopencv ' && "$PYTHON_EXE" -c "import cv2" 2>/dev/null; then
+        INSTALL_OPENCV_FROM_SOURCE=conda
+    else
+        INSTALL_OPENCV_FROM_SOURCE=1
+    fi
+fi
+if [[ "$INSTALL_OPENCV_FROM_SOURCE" == conda ]]; then
+    print_green "Using conda-forge OpenCV $("$PYTHON_EXE" -c 'import cv2; print(cv2.__version__)'): skipping the source build (set INSTALL_OPENCV_FROM_SOURCE=1 for SURF/CUDA)"
+elif [[ "$INSTALL_OPENCV_FROM_SOURCE" == 1 ]]; then
     #NOTE: This procedures is preferable since it avoids issues with Qt linking/configuration
     print_green "Installing opencv_python from source with non-free modules enabled"
     #$SCRIPTS_DIR/install_opencv_python.sh
