@@ -61,6 +61,7 @@ dependencies = [
   "evo",
   "trimesh",
   "munch",
+  "tensorboard",  # imported by thirdparty/disk (DISK, LIGHTGLUE_DISK) at load time
   "wandb",
   "plyfile",
   "glfw",

@@ -127,6 +127,7 @@ python-devtools = ">=0.12.2,<0.13"
 imgviz = "==1.2.6"  # conda-forge: PyPI only has an sdist, which cannot be built when solving for linux-64 from another platform
 
 [pypi-dependencies]
+tensorboard = "*"
 numba = "*"
 onnxruntime = "*"
 glfw = "*"
