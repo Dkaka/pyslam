@@ -222,6 +222,13 @@ Grab a coffee. It will take a while.
 
 The install scripts create a **single Python environment** `pyslam` that hosts all the [supported components and models](#supported-components-and-models). If `conda` is available, it automatically uses it; otherwise, it installs and uses `venv`. An internet connection is required.
 
+**Optional components on request.** Groups of optional components ("extras") can also be installed one at a time, on top of the core installation:
+```bash
+scripts/install_extra.sh --list            # show the available extras
+scripts/install_extra.sh features vpr      # e.g. learned local features/matchers and VPR loop detectors
+```
+Each extra fetches only the submodules it needs, applies the pySLAM patches, downloads the model weights ahead of time (some take minutes on first use), and checks every component on the bundled test images.
+
 Refer to these links for further details about the specific install procedures that are supported.
 - **Ubuntu**  [=>](#ubuntu)
 - **macOS** [=>](#macos)  
