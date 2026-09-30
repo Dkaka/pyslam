@@ -23,6 +23,7 @@
 import pyslam.config as config
 
 import torch
+from pyslam.utilities.torch import get_torch_device
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -118,9 +119,10 @@ class HardnetFeature2D(BaseFeature2D):
         )
         # print('model_weights_path:',self.model_weights_path)
 
-        self.do_cuda = do_cuda & torch.cuda.is_available()
-        print("cuda:", self.do_cuda)
-        device = torch.device("cuda:0" if self.do_cuda else "cpu")
+        device = get_torch_device() if do_cuda else torch.device("cpu")  # cuda > mps > cpu
+        self.device = device
+        self.do_cuda = device.type == "cuda"
+        print("device:", device)
 
         torch.set_grad_enabled(False)
 
@@ -134,10 +136,11 @@ class HardnetFeature2D(BaseFeature2D):
 
         print("==> Loading pre-trained network.")
         self.model = HardNet()
-        self.checkpoint = torch.load(self.model_weights_path)
+        # map_location: the checkpoint was saved on a GPU; load it on CPU first (moved to the chosen device below)
+        self.checkpoint = torch.load(self.model_weights_path, map_location="cpu")
         self.model.load_state_dict(self.checkpoint["state_dict"])
-        if self.do_cuda:
-            self.model.cuda()
+        if self.device.type != "cpu":
+            self.model.to(self.device)
             print("Extracting on GPU")
         else:
             print("Extracting on CPU")
@@ -151,8 +154,7 @@ class HardnetFeature2D(BaseFeature2D):
         for i in range(0, len(patches), self.batch_size):
             data_a = patches[i : i + self.batch_size, :, :, :].astype(np.float32)
             data_a = torch.from_numpy(data_a)
-            if self.do_cuda:
-                data_a = data_a.cuda()
+            data_a = data_a.to(self.device)
             data_a = Variable(data_a)
             # compute output
             with torch.no_grad():
@@ -165,8 +167,7 @@ class HardnetFeature2D(BaseFeature2D):
     def compute_des(self, patches):
         patches = torch.from_numpy(patches).float()
         patches = torch.unsqueeze(patches, 1)
-        if self.do_cuda:
-            patches = patches.cuda()
+        patches = patches.to(self.device)
         with torch.no_grad():
             descrs = self.model(patches)
         return descrs.detach().cpu().numpy().reshape(-1, 128)

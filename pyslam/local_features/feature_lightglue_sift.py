@@ -21,6 +21,7 @@ import pyslam.config as config
 import cv2
 import numpy as np
 import torch
+from pyslam.utilities.torch import get_torch_device
 from threading import RLock
 
 from pyslam.utilities.logging import Printer
@@ -65,7 +66,7 @@ class LightGlueSIFTFeature2D(BaseFeature2D):
         self.num_features = num_features
         self.config = SIFT.default_conf.copy()
         self.config["max_num_keypoints"] = self.num_features
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # 'mps', 'cpu'
+        self.device = get_torch_device()
         self.SIFT = SIFT(conf=self.config)
 
     def setMaxFeatures(

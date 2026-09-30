@@ -28,6 +28,7 @@ import os, pdb
 from PIL import Image
 import numpy as np
 import torch
+from pyslam.utilities.torch import get_torch_device
 import cv2
 from threading import RLock
 
@@ -199,8 +200,10 @@ class R2d2Feature2D(BaseFeature2D):
         self.max_scale = max_scale
         self.reliability_thr = reliability_thr
         self.repeatability_thr = repeatability_thr
-        self.do_cuda = do_cuda
-        if do_cuda:
+        self.device = get_torch_device() if do_cuda else torch.device("cpu")  # cuda > mps > cpu
+        print("device:", self.device)
+        # request a CUDA GPU from r2d2 only if CUDA is used (common.torch_set_gpu asserts otherwise)
+        if self.device.type == "cuda":
             gpus = [0]
         else:
             gpus = -1
@@ -210,8 +213,8 @@ class R2d2Feature2D(BaseFeature2D):
         print("==> Loading pre-trained network.")
 
         self.net = load_network(self.model_weights_path)
-        if self.do_cuda:
-            self.net = self.net.cuda()
+        if self.device.type != "cpu":
+            self.net = self.net.to(self.device)
 
         # create the non-maxima detector
         self.detector = NonMaxSuppression(rel_thr=reliability_thr, rep_thr=repeatability_thr)
@@ -227,8 +230,7 @@ class R2d2Feature2D(BaseFeature2D):
         with self.lock:
             H, W = img.shape[:2]
             img = norm_RGB(img)[None]
-            if self.do_cuda:
-                img = img.cuda()
+            img = img.to(self.device)
 
             # extract keypoints/descriptors for a single image
             xys, desc, scores, levels = extract_multiscale(

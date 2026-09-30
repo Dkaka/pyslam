@@ -25,6 +25,7 @@ config.cfg.set_lib("lightglue")
 
 import numpy as np
 import torch
+from pyslam.utilities.torch import get_torch_device
 
 import cv2
 from threading import RLock
@@ -72,7 +73,7 @@ class AlikedFeature2D(BaseFeature2D):
         self.num_features = num_features
         config = ALIKED.default_conf.copy()
         config["max_num_keypoints"] = self.num_features
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # 'mps', 'cpu'
+        self.device = get_torch_device()
         self.ALIKED = ALIKED(**config).eval().to(self.device)
 
     def setMaxFeatures(

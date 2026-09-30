@@ -22,7 +22,6 @@ import os
 import cv2
 import torch
 import time
-import platform
 
 import pyslam.config as config
 
@@ -32,6 +31,7 @@ from demo_superpoint import SuperPointFrontend
 from threading import RLock
 
 from pyslam.utilities.logging import Printer
+from pyslam.utilities.torch import get_torch_device
 from pyslam.utilities.system import is_opencv_version_greater_equal
 from .feature_base import BaseFeature2D
 
@@ -48,10 +48,10 @@ class SuperPointOptions:
         self.conf_thresh = 0.015
         self.nn_thresh = 0.7
 
-        use_cuda = torch.cuda.is_available() and do_cuda
-        device = torch.device("cuda" if use_cuda else "cpu")
+        device = get_torch_device() if do_cuda else torch.device("cpu")
         print("SuperPoint using ", device)
-        self.cuda = use_cuda
+        self.device = device
+        self.cuda = device.type == "cuda"  # SuperPointFrontend only knows cuda/cpu (see _NetOnDevice)
 
 
 # convert matrix of pts into list of keypoints
@@ -87,11 +87,26 @@ def transpose_des(des):
         return None
 
 
+class _NetOnDevice(torch.nn.Module):
+    """
+    Runs a SuperPointNet on a device that SuperPointFrontend does not handle itself (it only knows
+    cuda/cpu), e.g. Apple MPS: moves the input there and returns the coarse descriptors on the CPU,
+    where the frontend samples them with CPU keypoint coordinates.
+    """
+
+    def __init__(self, net, device):
+        super().__init__()
+        self.net = net.to(device).eval()
+        self.device = device
+
+    def forward(self, x):
+        semi, coarse_desc = self.net(x.to(self.device))
+        return semi, coarse_desc.cpu()
+
+
 # Interface for pySLAM
 class SuperPointFeature2D(BaseFeature2D):
     def __init__(self, do_cuda=True):
-        if platform.system() == "Darwin":
-            do_cuda = False
         self.lock = RLock()
         self.opts = SuperPointOptions(do_cuda)
         print(self.opts)
@@ -106,6 +121,8 @@ class SuperPointFeature2D(BaseFeature2D):
             nn_thresh=self.opts.nn_thresh,
             cuda=self.opts.cuda,
         )
+        if self.opts.device.type not in ("cuda", "cpu"):
+            self.fe.net = _NetOnDevice(self.fe.net, self.opts.device)
         print("==> Successfully loaded pre-trained network.")
 
         self.pts = []

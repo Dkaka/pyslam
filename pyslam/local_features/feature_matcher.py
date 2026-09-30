@@ -24,6 +24,7 @@ import numpy as np
 import cv2
 import platform
 import torch
+from pyslam.utilities.torch import get_torch_device
 
 from pyslam.utilities.logging import Printer
 from pyslam.utilities.system import import_from
@@ -898,13 +899,22 @@ class XFeatMatcher(FeatureMatcher):
             detector_type=detector_type,
             descriptor_type=descriptor_type,
         )
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_torch_device()
         self.torch_device = device
         self.matcher = XFeat()
+        self.matcher.dev = device  # XFeat itself only picks cuda/cpu
+        self.matcher.net = self.matcher.net.to(device)
         self.submatcher_type = "xfeat"
         if "submatcher_type" in kwargs:
             self.submatcher_type = kwargs["submatcher_type"]
             print(f"XFeatMatcher: submatcher_type: {self.submatcher_type}")
+        if self.submatcher_type == "lightglue":
+            # XFeat creates its LighterGlue lazily, and LighterGlue itself only picks cuda/cpu:
+            # create it here on the same device as XFeat.
+            LighterGlue = import_from("modules.lighterglue", "LighterGlue")
+            self.matcher.lighterglue = LighterGlue()
+            self.matcher.lighterglue.dev = device
+            self.matcher.lighterglue.net.to(device)
         self.matcher_name = "XFeatFeatureMatcher"
         Printer.green(f"matcher: {self.matcher_name}")
 
@@ -929,7 +939,7 @@ class LightGlueMatcher(FeatureMatcher):
             detector_type=detector_type,
             descriptor_type=descriptor_type,
         )
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_torch_device()
         self.torch_device = device
         if self.torch_device == "cuda":
             LightGlue.pruning_keypoint_thresholds["cuda"]
@@ -969,12 +979,12 @@ class LoFTRMatcher(FeatureMatcher):
             detector_type=detector_type,
             descriptor_type=descriptor_type,
         )
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_torch_device()
         # device = 'cpu' # force cpu mode
         if device.type == "cuda":
             print("LoFTRMatcher: Using CUDA")
         else:
-            print("LoFTRMatcher: Using CPU")
+            print(f"LoFTRMatcher: Using {device.type.upper()}")
 
         self.torch_device = device
         if self.torch_device == "cuda":

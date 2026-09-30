@@ -31,6 +31,7 @@ import numpy as np
 
 from threading import RLock
 import torch
+from pyslam.utilities.torch import get_torch_device
 import scipy
 
 from lib.model_test import D2Net
@@ -95,15 +96,17 @@ class D2NetFeature2D(BaseFeature2D):
         self.frame = None
         self.keypoint_size = 20  # just a representative size for visualization and in order to convert extracted points to cv2.KeyPoint
 
-        self.do_cuda = do_cuda & torch.cuda.is_available()
-        print("cuda:", self.do_cuda)
-        self.device = torch.device("cuda" if self.do_cuda else "cpu")
+        self.device = get_torch_device() if do_cuda else torch.device("cpu")  # cuda > mps > cpu
+        self.do_cuda = self.device.type == "cuda"
+        print("device:", self.device)
 
         torch.set_grad_enabled(False)
 
         print("==> Loading pre-trained network.")
         # Creating CNN model
-        self.model = D2Net(model_file=self.models_path, use_relu=use_relu, use_cuda=do_cuda)
+        self.model = D2Net(model_file=self.models_path, use_relu=use_relu, use_cuda=self.do_cuda)
+        if self.device.type not in ("cuda", "cpu"):  # D2Net itself only knows cuda/cpu (e.g. Apple MPS)
+            self.model = self.model.to(self.device)
         if self.do_cuda:
             print("Extracting on GPU")
         else:
