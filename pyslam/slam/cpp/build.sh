@@ -48,10 +48,14 @@ if [[ -n "$EXTERNAL_OPTIONS" ]]; then
 fi
 
 OpenCV_DIR="$PROJECT_ROOT/thirdparty/opencv/install/lib/cmake/opencv4"
+if [[ ! -d "$OpenCV_DIR" ]] && [[ -n "$CONDA_PREFIX" ]] && [[ -d "$CONDA_PREFIX/lib/cmake/opencv4" ]]; then
+    # no locally built OpenCV: use the one of the conda environment (conda-forge libopencv)
+    OpenCV_DIR="$CONDA_PREFIX/lib/cmake/opencv4"
+fi
 echo "OpenCV_DIR: $OpenCV_DIR"
 if [[ -d "$OpenCV_DIR" ]]; then
     EXTERNAL_OPTIONS="$EXTERNAL_OPTIONS -DOpenCV_DIR=$OpenCV_DIR"
-fi 
+fi
 
 export CONDA_OPTIONS=""
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then

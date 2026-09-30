@@ -76,16 +76,15 @@ fi
 
 PYTHON_EXE=$(get_python_exe)
 ensure_pip "$PYTHON_EXE" || exit 1
-"$PYTHON_EXE" -m pip install --upgrade pip setuptools wheel build
-"$PYTHON_EXE" -m pip install -e .
-
 # NOTE: these are the "system" packages that are needed within conda to build code from source
 if [[ "$OSTYPE" == darwin* ]]; then
     # macOS: use clang from Xcode; avoid Linux-only packages
     conda install -y -c conda-forge \
-        pkg-config cmake eigen suitesparse lapack openblas \
-        tbb tbb-devel libpng libtiff zlib jpeg freetype \
-        ffmpeg glew glfw boost
+        pkg-config cmake "eigen=5.0.1" suitesparse lapack openblas \
+        tbb tbb-devel libpng libtiff zlib libjpeg-turbo freetype \
+        ffmpeg glew glfw boost \
+        'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
+        "pyqt>=5.15,<6" "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 else
     conda install -y -c conda-forge \
         pkg-config \
@@ -94,14 +93,27 @@ else
         suitesparse \
         lapack \
         glew glfw mesa-libgl-devel-cos7-x86_64 \
-        libtiff zlib jpeg eigen tbb libpng \
-        x264 ffmpeg \
+        libtiff zlib libjpeg-turbo "eigen=5.0.1" tbb libpng \
+        x264 "ffmpeg>=6,<8" libva \
         freetype cairo \
         pygobject gtk2 gtk3 glib xorg-xorgproto \
         libwebp expat \
         compilers gcc_linux-64 gxx_linux-64 tbb tbb-devel \
-        boost openblas
+        boost libboost-devel openblas \
+        'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
+        "pyqt>=5.15,<6" "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 fi
+
+# Install the Python packages after the conda packages, so that conda does not replace pip-installed
+# ones (e.g. numpy). numpy<2 is pinned on the conda side too (libopencv would pull numpy 2).
+# OpenCV comes from conda-forge (C++ libs for the C++ core, and cv2 via py-opencv): it registers the
+# opencv-python(-headless) dist-infos, so pip does not install another cv2 over it. The qt6 build is
+# pinned because the default solve can pick the headless one, which has no cv2.imshow.
+# OpenCV 4 only: orbslam2_features needs find_package(OpenCV 4). SURF (non-free) is not available.
+# PyQt5 comes from conda-forge too (pyqt): pip's PyQt5 wheel uses the system glib, and a process that
+# imports it before cv2 then fails to load conda's cv2 (e.g. "undefined symbol: g_string_copy").
+"$PYTHON_EXE" -m pip install --upgrade pip setuptools wheel build || exit 1
+"$PYTHON_EXE" -m pip install -e . || { print_red "ERROR: pip install -e . failed"; exit 1; }
 
 cd "$STARTING_DIR"
 
