@@ -168,7 +168,8 @@ def build_lfnet_config():
         help="resize image (do nothing if max_longer_edge <= 0)",
     )
 
-    tmp_config, unparsed = get_config(parser)
+    # parse defaults only: do not consume the host application's sys.argv (e.g. main_slam.py options)
+    tmp_config, unparsed = parser.parse_known_args([])
 
     if len(unparsed) > 0:
         raise ValueError("Miss finding argument: unparsed={}\n".format(unparsed))

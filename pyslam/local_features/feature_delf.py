@@ -40,8 +40,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 import numpy as np
 from pyslam.utilities.tensorflow import import_tf_compat_v1
 
-# Import TensorFlow using the unified function
-tf = import_tf_compat_v1()
+# Import TensorFlow using the unified function (fails clearly if TF is missing)
+import_tf_compat_v1()
+# MakeExtractor below is the upstream eager TF2 DELF extractor: it needs the TF2 API
+# (tf.saved_model.load(path)), not compat.v1 (whose saved_model.load is the TF1 loader)
+import tensorflow as tf
 
 from google.protobuf import text_format
 
@@ -457,7 +460,7 @@ class DelfFeature2D(BaseFeature2D):
         if self.session is not None:
             print("DELF: closing tf session")
             self.session.close()
-            tf.reset_default_graph()
+            tf.compat.v1.reset_default_graph()
 
     def compute_kps_des(self, frame):
         with self.lock:
