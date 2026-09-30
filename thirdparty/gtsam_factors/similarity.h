@@ -41,8 +41,11 @@
 #include <gtsam/base/Matrix.h>
 #include <gtsam/base/Vector.h>
 
+#include <unsupported/Eigen/MatrixFunctions>
+
 #include <memory>
 
+#include <algorithm>
 #include <iostream>
 
 using namespace gtsam;
@@ -52,10 +55,39 @@ using symbol_shorthand::X;
 
 namespace gtsam_factors {
 
-// Similarity3 prior factor with autodifferencing. Goal is to penalize all terms.
+// Right Jacobian of Sim(3) at xi (tangent order [w, u, lambda], as in gtsam::Similarity3):
+//   Exp(xi + d) ~= Exp(xi) * Exp(J_r(xi) d),   J_r(xi) = sum_k (-ad_xi)^k / (k+1)!
+// The series is the top-right block of expm([[-ad_xi, I], [0, 0]]), evaluated exactly by Eigen's
+// Pade matrix exponential. Uniformly scaling translations is an automorphism of Sim(3): with
+// D = diag(I3, k I3, 1), J_r(D xi) = D J_r(xi) D^-1. J_r is therefore evaluated at unit translation
+// and scaled back, which keeps expm well conditioned for any translation magnitude (arbitrary
+// monocular scale). No finite-difference step is involved.
+inline gtsam::Matrix7 Sim3RightJacobian(const gtsam::Vector7 &xi) {
+    const double k = 1.0 / std::max(1.0, xi.segment<3>(3).norm());
+    gtsam::Vector7 xi_scaled = xi;
+    xi_scaled.segment<3>(3) *= k;
+
+    Eigen::Matrix<double, 14, 14> B = Eigen::Matrix<double, 14, 14>::Zero();
+    B.topLeftCorner<7, 7>() = -gtsam::Similarity3::adjointMap(xi_scaled);
+    B.topRightCorner<7, 7>().setIdentity();
+    gtsam::Matrix7 J = B.exp().topRightCorner<7, 7>(); // = D J_r(xi) D^-1
+
+    J.block<3, 7>(3, 0) /= k; // D^-1 (.)
+    J.block<7, 3>(0, 3) *= k; // (.) D
+    return J;
+}
+
+// Inverse right Jacobian of Sim(3): d Log(g Exp(d)) / d d at d = 0, for xi = Log(g).
+inline gtsam::Matrix7 Sim3LogmapDerivative(const gtsam::Vector7 &xi) {
+    return Sim3RightJacobian(xi).inverse();
+}
+
+// Similarity3 prior factor. Goal is to penalize all terms.
+// Error e(x) = Log(prior^-1 * x). With GTSAM's right retraction x * Exp(d), the Jacobian is exactly
+// J_r^-1(e(x)) (Sim3LogmapDerivative), computed analytically.
 // NOTE: GTSAM (4.3) also provides PriorFactor<Similarity3> (gtsam.PriorFactorSimilarity3) with the
 // same error, but Similarity3's chart has no Local() Jacobian, so its prior uses the identity as the
-// Jacobian (exact only at x == prior). This factor computes the Jacobian numerically instead.
+// Jacobian (exact only at x == prior).
 class PriorFactorSimilarity3 : public gtsam::NoiseModelFactor1<gtsam::Similarity3> {
   public:
     using Base = gtsam::NoiseModelFactor1<gtsam::Similarity3>;
@@ -71,11 +103,7 @@ class PriorFactorSimilarity3 : public gtsam::NoiseModelFactor1<gtsam::Similarity
         gtsam::Vector7 error = gtsam::Similarity3::Logmap(prior_inverse_ * sim);
 
         if (H) {
-            auto functor = [this](const gtsam::Similarity3 &sim) {
-                return gtsam::Similarity3::Logmap(prior_inverse_ * sim);
-            };
-            *H = gtsam::numericalDerivative11<gtsam::Vector7, gtsam::Similarity3>(functor, sim,
-                                                                                  1e-5);
+            *H = Sim3LogmapDerivative(error);
         }
         return error;
     }
