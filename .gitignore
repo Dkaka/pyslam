@@ -30,6 +30,7 @@ thirdparty/gtsam_local
 thirdparty/gtsam_factors/lib
 thirdparty/gtsam_factors/build
 thirdparty/gtsam_factors/include
+thirdparty/json
 thirdparty/contextdesc/pretrained 
 thirdparty/pydbow3/ORBvoc.txt
 thirdparty/protoc 
