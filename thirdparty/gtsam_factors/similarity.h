@@ -53,6 +53,9 @@ using symbol_shorthand::X;
 namespace gtsam_factors {
 
 // Similarity3 prior factor with autodifferencing. Goal is to penalize all terms.
+// NOTE: GTSAM (4.3) also provides PriorFactor<Similarity3> (gtsam.PriorFactorSimilarity3) with the
+// same error, but Similarity3's chart has no Local() Jacobian, so its prior uses the identity as the
+// Jacobian (exact only at x == prior). This factor computes the Jacobian numerically instead.
 class PriorFactorSimilarity3 : public gtsam::NoiseModelFactor1<gtsam::Similarity3> {
   public:
     using Base = gtsam::NoiseModelFactor1<gtsam::Similarity3>;
@@ -424,20 +427,5 @@ class BetweenFactorSimilarity3InverseOnlyS2
     // shorthand for a smart pointer to a factor
     typedef std::shared_ptr<BetweenFactorSimilarity3InverseOnlyS2> shared_ptr;
 };
-
-// =====================================================================================================================
-
-// Function to insert Similarity3 into Values
-void insertSimilarity3(gtsam::Values &values, const Key &key, const gtsam::Similarity3 &sim3) {
-    values.insert(key, sim3);
-}
-
-// Function to get Similarity3 from Values
-gtsam::Similarity3 getSimilarity3(const gtsam::Values &values, gtsam::Key key) {
-    if (!values.exists(key)) {
-        throw std::runtime_error("Key not found in Values.");
-    }
-    return values.at<gtsam::Similarity3>(key); // Return by value (safe)
-}
 
 } // namespace gtsam_factors

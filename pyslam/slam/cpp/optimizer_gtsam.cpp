@@ -65,8 +65,6 @@
 #endif
 
 // Use the functions from similarity.h
-using gtsam_factors::getSimilarity3;
-using gtsam_factors::insertSimilarity3;
 
 // Typedefs for PriorFactor types
 using PriorFactorPose3 = gtsam::PriorFactor<gtsam::Pose3>;
@@ -1124,7 +1122,7 @@ Sim3OptimizationResult OptimizerGTSAM::optimize_sim3(
 
     // Initial Sim3 transformation
     Similarity3 sim3_init(Rot3(R12), Point3(t12), s12);
-    insertSimilarity3(initial_estimate, X(0), sim3_init);
+    initial_estimate.insert(X(0), sim3_init);
 
     if (fix_scale) {
         auto scale_prior = std::make_shared<gtsam_factors::PriorFactorSimilarity3ScaleOnly>(
@@ -1225,7 +1223,7 @@ Sim3OptimizationResult OptimizerGTSAM::optimize_sim3(
     LevenbergMarquardtOptimizer optimizer(graph, initial_estimate, params);
     Values opt_result = optimizer.optimize();
 
-    Similarity3 sim3_optimized = getSimilarity3(opt_result, X(0));
+    Similarity3 sim3_optimized = opt_result.at<Similarity3>(X(0));
     Eigen::Matrix3d R12_opt = sim3_optimized.rotation().matrix();
     Eigen::Vector3d t12_opt = sim3_optimized.translation();
     double s12_opt = sim3_optimized.scale();
@@ -1273,7 +1271,7 @@ Sim3OptimizationResult OptimizerGTSAM::optimize_sim3(
 
     double delta_err = graph.error(opt_result) - initial_error;
 
-    sim3_optimized = getSimilarity3(opt_result, X(0));
+    sim3_optimized = opt_result.at<Similarity3>(X(0));
     R12_opt = sim3_optimized.rotation().matrix();
     t12_opt = sim3_optimized.translation();
     s12_opt = sim3_optimized.scale();
@@ -1311,7 +1309,7 @@ Sim3OptimizationResult OptimizerGTSAM::optimize_sim3(
         }
     }
 
-    Similarity3 sim3_final = getSimilarity3(opt_result, X(0));
+    Similarity3 sim3_final = opt_result.at<Similarity3>(X(0));
     double scale_out = fix_scale ? s12 : sim3_final.scale();
 
     result.num_inliers = num_inliers;
@@ -1368,7 +1366,7 @@ double OptimizerGTSAM::optimize_essential_graph(
         vec_Scw_is_valid[keyframe_id] = true;
 
         Similarity3 Siw_gtsam(Rot3(Siw.R()), Point3(Siw.t()), Siw.s());
-        insertSimilarity3(initial_values, X(keyframe_id), Siw_gtsam);
+        initial_values.insert(X(keyframe_id), Siw_gtsam);
 
         if (keyframe == loop_keyframe) {
             auto fixed_sim3_prior = std::make_shared<gtsam_factors::PriorFactorSimilarity3>(
@@ -1551,7 +1549,7 @@ double OptimizerGTSAM::optimize_essential_graph(
         }
 
         int keyframe_id = keyframe->kid;
-        Similarity3 corrected_Siw = getSimilarity3(opt_result, X(keyframe_id));
+        Similarity3 corrected_Siw = opt_result.at<Similarity3>(X(keyframe_id));
 
         Eigen::Matrix3d R = corrected_Siw.rotation().matrix();
         Eigen::Vector3d t = corrected_Siw.translation();

@@ -1412,7 +1412,7 @@ class SimResectioningFactor:
         self, this: gtsam.CustomFactor, values: gtsam.Values, H: list[np.ndarray]
     ) -> np.ndarray:
         # Retrieve similarity transform from the values using a helper function.
-        sim3 = gtsam_factors.get_similarity3(values, self.sim_pose_key)
+        sim3 = values.atSimilarity3(self.sim_pose_key)
 
         def compute_error(sim: gtsam.Similarity3) -> np.ndarray:
             R = sim.rotation().matrix()  # 3x3 rotation matrix
@@ -1469,7 +1469,7 @@ class SimInvResectioningFactor:
         self, this: gtsam.CustomFactor, values: gtsam.Values, H: list[np.ndarray]
     ) -> np.ndarray:
         # Retrieve similarity transform
-        sim3 = gtsam_factors.get_similarity3(values, self.sim_pose_key)
+        sim3 = values.atSimilarity3(self.sim_pose_key)
 
         def compute_error(sim: gtsam.Similarity3) -> np.ndarray:
             R = sim.rotation().matrix()  # 3x3 rotation matrix
@@ -1590,11 +1590,10 @@ def optimize_sim3(
 
     # Initial Sim3 transformation
     sim3_init = gtsam.Similarity3(gtsam.Rot3(R12.copy()), gtsam.Point3(t12.ravel().copy()), s12)
-    # initial_estimate.insert(X(0), sim3_init)
-    gtsam_factors.insert_similarity3(initial_estimate, X(0), sim3_init)
+    initial_estimate.insert(X(0), sim3_init)
 
     # print(f'Inserted sim3: R: {sim3_init.rotation()}, t: {sim3_init.translation()}, s: {sim3_init.scale()}')
-    # sim3_init_back = gtsam_factors.get_similarity3(initial_estimate, X(0))
+    # sim3_init_back = initial_estimate.atSimilarity3(X(0))
     # print(f'Getting back sim3: R: {sim3_init_back.rotation()}, t: {sim3_init_back.translation()}, s: {sim3_init_back.scale()}')
 
     if fix_scale:
@@ -1695,7 +1694,7 @@ def optimize_sim3(
     result = optimizer.optimize()
 
     # sim3_optimized = result.at(gtsam.Similarity3, X(0))
-    sim3_optimized = gtsam_factors.get_similarity3(result, X(0))
+    sim3_optimized = result.atSimilarity3(X(0))
     R12_opt = sim3_optimized.rotation().matrix()
     t12_opt = sim3_optimized.translation().reshape(3, 1)
     s12_opt = sim3_optimized.scale()
@@ -1762,7 +1761,7 @@ def optimize_sim3(
 
     delta_err = graph.error(result) - initial_error
 
-    sim3_optimized = gtsam_factors.get_similarity3(result, X(0))
+    sim3_optimized = result.atSimilarity3(X(0))
     R12_opt = sim3_optimized.rotation().matrix()
     t12_opt = sim3_optimized.translation().reshape(3, 1)
     s12_opt = sim3_optimized.scale()
@@ -1804,7 +1803,7 @@ def optimize_sim3(
 
     # Retrieve optimized Sim3
     # sim3_optimized = result.at(gtsam.Similarity3, X(0))
-    sim3_optimized = gtsam_factors.get_similarity3(result, X(0))
+    sim3_optimized = result.atSimilarity3(X(0))
 
     scale_out = sim3_optimized.scale() if not fix_scale else s12
 
@@ -1864,7 +1863,7 @@ def optimize_essential_graph(
         vec_Scw[keyframe_id] = Siw
 
         Siw_gtsam = gtsam.Similarity3(gtsam.Rot3(Siw.R), gtsam.Point3(Siw.t.ravel()), Siw.s)
-        gtsam_factors.insert_similarity3(initial_values, X(keyframe_id), Siw_gtsam)
+        initial_values.insert(X(keyframe_id), Siw_gtsam)
 
         if keyframe == loop_keyframe:
             fixed_sim3_prior = gtsam_factors.PriorFactorSimilarity3(
@@ -2024,7 +2023,7 @@ def optimize_essential_graph(
     for keyframe in all_keyframes:
         keyframe_id = keyframe.kid
 
-        corrected_Siw = gtsam_factors.get_similarity3(result, X(keyframe_id))
+        corrected_Siw = result.atSimilarity3(X(keyframe_id))
 
         R = corrected_Siw.rotation().matrix()
         t = corrected_Siw.translation()
@@ -2176,7 +2175,7 @@ def optimize_essential_graph2(
         #     graph.add(fixed_sim3_prior)
 
         if keyframe != loop_keyframe:
-            gtsam_factors.insert_similarity3(initial_values, X(keyframe_id), Siw_gtsam)
+            initial_values.insert(X(keyframe_id), Siw_gtsam)
 
         if fix_scale and keyframe != loop_keyframe:
             # Only add scale prior for keyframes that are in the optimization
@@ -2383,7 +2382,7 @@ def optimize_essential_graph2(
         if keyframe == loop_keyframe:
             continue
 
-        corrected_Siw = gtsam_factors.get_similarity3(result, X(keyframe_id))
+        corrected_Siw = result.atSimilarity3(X(keyframe_id))
 
         R = corrected_Siw.rotation().matrix()
         t = corrected_Siw.translation()
@@ -2476,7 +2475,7 @@ def optimize_essential_graph2(
 
 #         Swi_gtsam = gtsam.Similarity3(gtsam.Rot3(Swi.R), gtsam.Point3(Swi.t.ravel()), Swi.s)
 #         # initial_values.insert(X(keyframe_id), Siw_gtsam)
-#         gtsam_factors.insert_similarity3(initial_values, X(keyframe_id), Swi_gtsam)
+#         initial_values.insert(X(keyframe_id), Swi_gtsam)
 
 #         if keyframe == loop_keyframe:
 #             # Create a PriorFactor to fix the Sim3 transformation
@@ -2644,7 +2643,7 @@ def optimize_essential_graph2(
 #         keyframe_id = keyframe.kid
 
 #         # corrected_Swi = optimizer.values().atPose3(keyframe_id)
-#         corrected_Swi = gtsam_factors.get_similarity3(result, X(keyframe_id))
+#         corrected_Swi = result.atSimilarity3(X(keyframe_id))
 
 #         R = corrected_Swi.rotation().matrix()
 #         t = corrected_Swi.translation()

@@ -479,12 +479,6 @@ PYBIND11_MODULE(gtsam_factors, m) {
         .def("get_weight", &gtsam_factors::SimInvResectioningFactor::getWeight)
         .def("set_weight", &gtsam_factors::SimInvResectioningFactor::setWeight);
 
-    m.def("insert_similarity3", &gtsam_factors::insertSimilarity3, "Insert Similarity3 into Values",
-          py::arg("values"), py::arg("key"), py::arg("sim3"));
-
-    m.def("get_similarity3", &gtsam_factors::getSimilarity3, "Get Similarity3 from Values",
-          py::arg("values"), py::arg("key"));
-
 #if 0
     // Expose BetweenFactor with Similarity3
     py::class_<gtsam_factors::BetweenFactor<Similarity3>, gtsam::NonlinearFactor, std::shared_ptr<gtsam_factors::BetweenFactor<Similarity3>>>(m, "BetweenFactorSimilarity3")
