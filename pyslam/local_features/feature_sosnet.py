@@ -27,6 +27,7 @@ import math
 import cv2
 
 import torch
+from pyslam.utilities.torch import get_torch_device
 import sosnet_model
 
 from .feature_base import BaseFeature2D
@@ -46,9 +47,10 @@ class SosnetFeature2D(BaseFeature2D):
         print("Using SosnetFeature2D")
         self.model_base_path = config.cfg.root_folder + "/thirdparty/SOSNet/"
 
-        self.do_cuda = do_cuda & torch.cuda.is_available()
-        print("cuda:", self.do_cuda)
-        device = torch.device("cuda" if self.do_cuda else "cpu")
+        device = get_torch_device() if do_cuda else torch.device("cpu")  # cuda > mps > cpu
+        self.device = device
+        self.do_cuda = device.type == "cuda"
+        print("device:", device)
 
         torch.set_grad_enabled(False)
 
@@ -64,11 +66,12 @@ class SosnetFeature2D(BaseFeature2D):
             torch.load(
                 os.path.join(
                     self.model_base_path, "sosnet-weights", "sosnet-32x32-" + self.net_name + ".pth"
-                )
+                ),
+                map_location="cpu",  # weights were saved on a GPU; moved to the chosen device below
             )
         )
-        if self.do_cuda:
-            self.model.cuda()
+        if self.device.type != "cpu":
+            self.model.to(self.device)
             print("Extracting on GPU")
         else:
             print("Extracting on CPU")
@@ -79,8 +82,7 @@ class SosnetFeature2D(BaseFeature2D):
     def compute_des(self, patches):
         patches = torch.from_numpy(patches).float()
         patches = torch.unsqueeze(patches, 1)
-        if self.do_cuda:
-            patches = patches.cuda()
+        patches = patches.to(self.device)
         with torch.no_grad():
             descrs = self.model(patches)
         return descrs.detach().cpu().numpy().reshape(-1, 128)

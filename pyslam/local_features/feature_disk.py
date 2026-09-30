@@ -33,6 +33,7 @@ import cv2
 from threading import RLock
 
 from pyslam.utilities.logging import Printer
+from pyslam.utilities.torch import get_torch_device
 from pyslam.utilities.system import is_opencv_version_greater_equal
 from pyslam.utilities.tensorflow import ensure_tensorflow_stub_for_tensorboard
 from .feature_base import BaseFeature2D
@@ -205,10 +206,10 @@ class DiskFeature2D(BaseFeature2D):
         self.mode = mode
         self.model_base_path = config.cfg.root_folder + "/thirdparty/disk/depth-save.pth"
 
-        self.do_cuda = do_cuda & torch.cuda.is_available()
-        print("cuda:", self.do_cuda)
+        self.DEV = get_torch_device() if do_cuda else torch.device("cpu")  # cuda > mps > cpu
+        self.do_cuda = self.DEV.type == "cuda"
+        print("DISK device:", self.DEV)
 
-        self.DEV = torch.device("cuda" if self.do_cuda else "cpu")
         self.CPU = torch.device("cpu")
         self.state_dict = torch.load(self.model_base_path, map_location="cpu")
 

@@ -45,9 +45,9 @@ from .loop_detector_vpr import (
     LoopDetectorSad,
     LoopDetectorAlexNet,
     LoopDetectorCosPlace,
+    LoopDetectorMegaloc,
 )
 from .loop_detector_vlad import LoopDetectorVlad
-from .global_feature_megaloc import GlobalFeatureMegaloc
 from .loop_detector_vocabulary import (
     DBow3OrbVocabularyData,
     DBow2OrbVocabularyData,
@@ -336,7 +336,7 @@ def loop_detector_factory(
     elif global_descriptor_type == GlobalDescriptorType.EIGENPLACES:
         loop_detector = LoopDetectorEigenPlaces(local_feature_manager=local_feature_manager)
     elif global_descriptor_type == GlobalDescriptorType.MEGALOC:
-        loop_detector = GlobalFeatureMegaloc(local_feature_manager=local_feature_manager)
+        loop_detector = LoopDetectorMegaloc(local_feature_manager=local_feature_manager)
     else:
         raise ValueError("loop_detector_factory: unknown global_descriptor_type")
 

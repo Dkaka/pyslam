@@ -29,6 +29,7 @@ import time
 
 import torchvision as tv
 import torch
+from pyslam.utilities.torch import get_torch_device
 
 import tfeat_model
 import tfeat_utils
@@ -46,9 +47,10 @@ class TfeatFeature2D(BaseFeature2D):
         print("Using TfeatFeature2D")
         self.model_base_path = config.cfg.root_folder + "/thirdparty/tfeat/"
 
-        self.do_cuda = do_cuda & torch.cuda.is_available()
-        print("cuda:", self.do_cuda)
-        device = torch.device("cuda:0" if self.do_cuda else "cpu")
+        device = get_torch_device() if do_cuda else torch.device("cpu")  # cuda > mps > cpu
+        self.device = device
+        self.do_cuda = device.type == "cuda"
+        print("device:", device)
 
         torch.set_grad_enabled(False)
 
@@ -62,10 +64,11 @@ class TfeatFeature2D(BaseFeature2D):
         self.models_path = self.model_base_path + "pretrained-models"
         self.net_name = "tfeat-liberty"
         self.model.load_state_dict(
-            torch.load(os.path.join(self.models_path, self.net_name + ".params"))
+            # weights were saved on a GPU; load on CPU first (moved to the chosen device below)
+            torch.load(os.path.join(self.models_path, self.net_name + ".params"), map_location="cpu")
         )
-        if self.do_cuda:
-            self.model.cuda()
+        if self.device.type != "cpu":
+            self.model.to(self.device)
             print("Extracting on GPU")
         else:
             print("Extracting on CPU")
@@ -76,8 +79,7 @@ class TfeatFeature2D(BaseFeature2D):
     def compute_des(self, patches):
         patches = torch.from_numpy(patches).float()
         patches = torch.unsqueeze(patches, 1)
-        if self.do_cuda:
-            patches = patches.cuda()
+        patches = patches.to(self.device)
         with torch.no_grad():
             descrs = self.model(patches)
         return descrs.detach().cpu().numpy().reshape(-1, 128)

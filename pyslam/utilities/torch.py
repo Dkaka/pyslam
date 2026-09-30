@@ -23,6 +23,21 @@ import numpy as np
 
 
 # Convert to numpy
+def get_torch_device(prefer_gpu: bool = True) -> torch.device:
+    """
+    Return the best available torch device: CUDA, then Apple MPS, then CPU.
+    Set the environment variable PYSLAM_TORCH_DEVICE (e.g. "cpu", "mps", "cuda") to force one.
+    """
+    forced = os.environ.get("PYSLAM_TORCH_DEVICE")
+    if forced:
+        return torch.device(forced)
+    if prefer_gpu and torch.cuda.is_available():
+        return torch.device("cuda")
+    if prefer_gpu and torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def to_np(x, ret_type=float) -> np.ndarray:
     x_np: np.ndarray = None
     if type(x) == torch.Tensor:

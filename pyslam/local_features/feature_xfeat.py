@@ -2,6 +2,7 @@ import sys
 import os
 import cv2
 import torch
+from pyslam.utilities.torch import get_torch_device
 
 import pyslam.config as config
 
@@ -47,6 +48,9 @@ class XFeat2D(BaseFeature2D):
         print("====>XFeat")
         # This class runs the SuperPoint network and processes its outputs.
         self.xfeat = XFeat(top_k=num_features)
+        # XFeat itself only picks cuda/cpu: move it to the best available device (incl. Apple MPS)
+        self.xfeat.dev = get_torch_device()
+        self.xfeat.net = self.xfeat.net.to(self.xfeat.dev)
 
         self.pts = []
         self.kps = []
