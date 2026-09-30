@@ -207,21 +207,39 @@ int Map::add_frame(FramePtr &frame, bool override_id) {
         return -1;
     }
 
-    std::lock_guard<MapMutex> lock(_lock);
     int ret = frame->id;
-    // Add to frames deque (with size limit)
-    if (frames.size() >= Parameters::kMaxLenFrameDeque) {
-        frames.pop_front();
-    }
-    frames.push_back(frame);
+    FramePtr evicted_frame;
+    {
+        std::lock_guard<MapMutex> lock(_lock);
+        // Add to frames deque (with size limit)
+        if (frames.size() >= Parameters::kMaxLenFrameDeque) {
+            evicted_frame = frames.front();
+            frames.pop_front();
+        }
+        frames.push_back(frame);
 
-    // Update max frame ID
-    if (override_id) {
-        ret = max_frame_id;
-        frame->id = ret;
-        max_frame_id++;
-    } else {
-        max_frame_id = std::max(max_frame_id, frame->id + 1);
+        // Update max frame ID
+        if (override_id) {
+            ret = max_frame_id;
+            frame->id = ret;
+            max_frame_id++;
+        } else {
+            max_frame_id = std::max(max_frame_id, frame->id + 1);
+        }
+    }
+    // Map points keep a shared_ptr to every frame that matched them (frame views). Drop the
+    // evicted frame's views, otherwise every tracked frame stays alive for the whole run.
+    // Keyframes are separate objects whose lifetime is managed by the map, so leave them alone.
+    // Done outside the map lock: remove_frame_view() takes the map point and frame locks.
+    if (evicted_frame && !evicted_frame->is_keyframe) {
+        const auto evicted_points = evicted_frame->get_points();
+        std::vector<int> idxs;
+        for (int i = 0; i < static_cast<int>(evicted_points.size()); ++i) {
+            if (evicted_points[i]) {
+                idxs.push_back(i);
+            }
+        }
+        evicted_frame->remove_frame_views(idxs);
     }
     return ret;
 }

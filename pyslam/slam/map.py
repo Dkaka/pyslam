@@ -298,8 +298,20 @@ class Map(object):
                 self.max_frame_id += 1
             else:
                 self.max_frame_id = max(self.max_frame_id, frame.id + 1)
+            evicted_frame = (
+                self.frames[0] if len(self.frames) == self.frames.maxlen else None
+            )
             self.frames.append(frame)
-            return ret
+        # Map points keep a reference to every frame that matched them (frame views). Drop the
+        # evicted frame's views, otherwise every tracked frame stays alive for the whole run.
+        # Keyframes are separate objects whose lifetime is managed by the map, so leave them alone.
+        if evicted_frame is not None and not evicted_frame.is_keyframe:
+            evicted_points = evicted_frame.get_points()
+            if evicted_points is not None:
+                evicted_frame.remove_frame_views(
+                    [i for i, p in enumerate(evicted_points) if p is not None]
+                )
+        return ret
 
     def remove_frame(self, frame: Frame):
         with self._lock:
