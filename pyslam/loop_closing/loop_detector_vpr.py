@@ -247,8 +247,6 @@ class LoopDetectorVprBase(LoopDetectorBase):
 
             global_feature_extractor = EigenPlacesFeatureExtractor()
         elif global_descriptor_name.lower() == "megaloc":
-            from global_feature_megaloc import GlobalFeatureMegaloc
-
             global_feature_extractor = GlobalFeatureMegaloc()
         else:
             raise ValueError("Unknown descriptor: " + global_descriptor_name)
