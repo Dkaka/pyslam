@@ -58,19 +58,9 @@ def check_open_clip_torch_version():
     # Check open-clip-torch version
     open_clip_version = None
     try:
-        # Try importlib.metadata first (Python 3.8+)
-        try:
-            import importlib.metadata
+        import importlib.metadata
 
-            open_clip_version = importlib.metadata.version("open-clip-torch")
-        except (ImportError, importlib.metadata.PackageNotFoundError):
-            # Fallback for older Python versions
-            try:
-                import pkg_resources
-
-                open_clip_version = pkg_resources.get_distribution("open-clip-torch").version
-            except Exception:
-                pass
+        open_clip_version = importlib.metadata.version("open-clip-torch")
     except Exception:
         pass
 

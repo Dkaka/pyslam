@@ -28,13 +28,20 @@ import platform
 import torch
 from PIL import Image
 import packaging
-import pkg_resources
+import packaging.version
+import types
 
 from torchvision import transforms
 from torchvision.transforms import CenterCrop, Compose
 
-# Recent setuptools/pkg_resources builds may no longer expose the vendored
-# `packaging` module that older f3rm releases import from pkg_resources.
+# f3rm's CLIP code does `from pkg_resources import packaging`. setuptools >= 81 no longer ships
+# pkg_resources, and recent builds that still do may not expose the vendored `packaging`. In that
+# case register a minimal in-process stand-in that provides only `packaging` (nothing is installed).
+try:
+    import pkg_resources
+except ImportError:
+    pkg_resources = types.ModuleType("pkg_resources")
+    sys.modules["pkg_resources"] = pkg_resources
 if not hasattr(pkg_resources, "packaging"):
     pkg_resources.packaging = packaging
 
