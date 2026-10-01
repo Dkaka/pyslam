@@ -724,6 +724,11 @@ std::vector<MapPointPtr> Frame::get_points() const {
     return points;
 }
 
+std::size_t Frame::points_size() const {
+    std::lock_guard<std::mutex> lock(_lock_features);
+    return points.size();
+}
+
 std::vector<MapPointPtr> Frame::get_matched_points() const {
     std::lock_guard<std::mutex> lock(_lock_features);
     std::vector<MapPointPtr> matched_points;

@@ -297,6 +297,7 @@ class Frame : public FrameBase, public inheritable_enable_shared_from_this<Frame
     void remove_frame_views(const std::vector<int> &idxs);
     void reset_points();
     std::vector<MapPointPtr> get_points() const;
+    std::size_t points_size() const; // number of point slots (one per keypoint), under the lock
     std::vector<MapPointPtr> get_matched_points() const;
     std::vector<int> get_matched_points_idxs() const;
     std::vector<int> get_unmatched_points_idxs() const;
