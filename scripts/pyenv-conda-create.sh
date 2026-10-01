@@ -41,35 +41,38 @@ fi
 
 #ubuntu_version=$(lsb_release -rs | cut -d. -f1)
 
-conda install -n base -y conda-anaconda-tos
-conda config --set plugins.auto_accept_tos yes || export CONDA_PLUGINS_AUTO_ACCEPT_TOS=yes
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2
-conda config --add channels conda-forge
-conda config --set channel_priority strict
+# This script only changes the environment it creates: it never installs into or updates the base
+# environment and never edits the user's conda configuration (~/.condarc). Channels are passed per
+# command (conda-forge only, strict priority), which also needs no Anaconda Terms-of-Service acceptance
+# for the defaults channels; inside the new env, an env-local .condarc keeps later `conda install`s
+# on conda-forge as well.
+CONDA_CHANNEL_OPTS="-c conda-forge --override-channels --strict-channel-priority"
 
-conda update conda -y
-
-# Use the libmamba solver for the (large) solves below: the classic solver can take tens of minutes.
-# It is conda's default since 23.10, but older installs or a `solver: classic` in ~/.condarc still use
-# the classic one. The option is passed per command, so the user's conda configuration is not changed.
+# Use the libmamba solver when available (conda's default since 23.10): the classic solver can take
+# tens of minutes for this environment. It is passed per command, and never installed by this script.
 CONDA_SOLVER_OPTS=""
-if ! conda list -n base 2>/dev/null | grep -qE "^conda-libmamba-solver "; then
-    conda install -n base -y conda-libmamba-solver || print_yellow "WARNING: could not install conda-libmamba-solver"
-fi
-if conda list -n base 2>/dev/null | grep -qE "^conda-libmamba-solver " && conda create --help 2>/dev/null | grep -q -- "--solver"; then
+CONDA_BASE_PYTHON="$(conda info --base)/bin/python"
+if conda create --help 2>/dev/null | grep -q -- "--solver" && "$CONDA_BASE_PYTHON" -c "import conda_libmamba_solver" &>/dev/null; then
     CONDA_SOLVER_OPTS="--solver=libmamba"
+    print_green "Using the libmamba solver"
 else
-    print_yellow "WARNING: the libmamba solver is not available: the environment solve may be slow"
+    print_yellow "WARNING: the libmamba solver is not available, so the environment solve may be slow."
+    print_yellow "         (Update conda to >= 23.10, or install conda-libmamba-solver in base yourself.)"
 fi
-
 
 if conda env list | grep -E "^[[:space:]]*$ENV_NAME[[:space:]]" > /dev/null; then
     print_yellow "Conda environment $ENV_NAME already exists."
 else 
     print_blue "Creating conda virtual environment $ENV_NAME with python version $PYSLAM_PYTHON_VERSION"
-    conda create $CONDA_SOLVER_OPTS -yn "$ENV_NAME" python="$PYSLAM_PYTHON_VERSION" || { print_red "ERROR: conda create failed"; exit 1; }
+    conda create $CONDA_SOLVER_OPTS $CONDA_CHANNEL_OPTS -yn "$ENV_NAME" python="$PYSLAM_PYTHON_VERSION" || { print_red "ERROR: conda create failed"; exit 1; }
+fi
+# env-local channel configuration (not the user's ~/.condarc): later `conda install`s in this env
+# also use conda-forge only, with strict priority
+ENV_PREFIX=$(conda env list | awk -v n="$ENV_NAME" '$1 == n {print $NF}')
+if [[ -n "$ENV_PREFIX" && -d "$ENV_PREFIX" ]]; then
+    conda config --file "$ENV_PREFIX/.condarc" --set channel_priority strict
+    conda config --file "$ENV_PREFIX/.condarc" --remove-key channels &>/dev/null || true
+    conda config --file "$ENV_PREFIX/.condarc" --add channels conda-forge
 fi
 
 # on first run
@@ -92,14 +95,14 @@ ensure_pip "$PYTHON_EXE" || exit 1
 # NOTE: these are the "system" packages that are needed within conda to build code from source
 if [[ "$OSTYPE" == darwin* ]]; then
     # macOS: use clang from Xcode; avoid Linux-only packages
-    conda install $CONDA_SOLVER_OPTS -y -c conda-forge \
+    conda install $CONDA_SOLVER_OPTS $CONDA_CHANNEL_OPTS -y \
         pkg-config cmake "eigen=5.0.1" suitesparse lapack openblas \
         tbb tbb-devel libpng libtiff zlib libjpeg-turbo freetype \
         ffmpeg glew glfw boost \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
         pyside6 "pytorch>=2.12" torchvision faiss-cpu onnxruntime "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 else
-    conda install $CONDA_SOLVER_OPTS -y -c conda-forge \
+    conda install $CONDA_SOLVER_OPTS $CONDA_CHANNEL_OPTS -y \
         pkg-config \
         glew \
         cmake \
