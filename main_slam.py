@@ -533,6 +533,17 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # exit from the main loop
+    if not args.headless:
+        Printer.green("pySLAM: shutting down (closing the windows, then saving the trajectory) ...")
+
+    # Close the viewers first, all at once, so that the windows go as soon as the user has asked to
+    # quit (they were closed one after the other at the very end, a few seconds later).
+    viewers = [v for v in (cv_image_viewer, plot_drawer, viewer3D) if v]
+    viewer_threads = [threading.Thread(target=v.quit, daemon=True) for v in viewers]
+    for t in viewer_threads:
+        t.start()
+    for t in viewer_threads:
+        t.join()
 
     # here we save the online estimated trajectory
     if online_trajectory_writer:
@@ -576,20 +587,8 @@ if __name__ == "__main__":
         print("Exception while computing metrics: ", e)
         print(f"traceback: {traceback.format_exc()}")
 
-    # close stuff - ensure proper shutdown order
-    # First stop SLAM (which stops all processes and shuts down their managers)
+    # Stop SLAM (which stops all processes and shuts down their managers); the viewers are closed above
     slam.quit()
-
-    # Give processes time to clean up before closing viewers
-    time.sleep(0.5)
-
-    # Then close viewers (which may have their own processes/threads and managers)
-    if cv_image_viewer:
-        cv_image_viewer.quit()
-    if plot_drawer:
-        plot_drawer.quit()
-    if viewer3D:
-        viewer3D.quit()
 
     # Explicitly stop all LoggerQueue instances to prevent shutdown errors
     LoggerQueue.stop_all_instances()
@@ -601,6 +600,8 @@ if __name__ == "__main__":
         force_kill_all_and_exit(verbose=False)  # just in case when running an evaluation
     else:
         if platform.system() == "Darwin" or mp.get_start_method() == "spawn":
-            # HACK
-            time.sleep(5.0)
+            # HACK: wait (up to 5 s) for the child processes to exit, then kill any that are left
+            deadline = time.time() + 5.0
+            while multiprocessing.active_children() and time.time() < deadline:
+                time.sleep(0.1)
             force_kill_all_and_exit(verbose=True)  # debug
