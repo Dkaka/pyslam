@@ -52,10 +52,15 @@ def mkdir_p(folder_path):
 def evaluate_evo(
     poses_est, poses_gt, is_monocular, plot_dir, label, save_metrics=True, save_plot=True
 ):
-    # evo's plotting (seaborn, pandas) and matplotlib are imported only when plotting is needed
+    # evo's plotting (seaborn, pandas) and matplotlib are imported only when plotting is needed.
+    # Importing evo.tools.plot switches matplotlib to evo's configured backend (TkAgg by default); in a
+    # GUI run Qt is already running by then, and that switch fails ("Cannot load backend 'TkAgg' ...
+    # as 'qt' is currently running"). The plots below are only saved to files: use Agg.
+    from evo.tools.settings import SETTINGS
+
+    SETTINGS.plot_backend = "Agg"
     from evo.tools import plot
     from evo.tools.plot import PlotMode
-    from evo.tools.settings import SETTINGS  # noqa: F401
     from matplotlib import pyplot as plt
 
 
