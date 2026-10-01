@@ -117,6 +117,11 @@ class SharedSingletonLock:
 
 # Qplot2d class for dynamic 2D plotting using pyqtgraph
 # NOTE: This is a good tutorial https://www.pythonguis.com/tutorials/plotting-pyqtgraph/
+# pyqtgraph's single-letter colours that have poor contrast on the white plot background ('c', 'g'
+# and 'y' are (0,255,255), (0,255,0) and (255,255,0)): drawn with darker shades instead.
+_COLORS_ON_WHITE = {"c": (0, 150, 190), "g": (0, 160, 0), "y": (200, 150, 0)}
+
+
 class Qplot2d:
     def __init__(self, xlabel: str = "", ylabel: str = "", title: str = ""):
         self.xlabel = xlabel
@@ -223,7 +228,12 @@ class Qplot2d:
                 self.line_width = max(1.0, float(screen.devicePixelRatio()))
         except Exception:
             pass
-        self.legend = pg.LegendItem()
+        # Legend in a light, shaded box with dark text, so that it stays readable over the plot lines
+        self.legend = pg.LegendItem(
+            brush=pg.mkBrush(240, 240, 240, 220),
+            pen=pg.mkPen(160, 160, 160),
+            labelTextColor=(20, 20, 20),
+        )
         self.win.setLabel("left", self.ylabel)  # Set the y-axis label
         self.win.setLabel("bottom", self.xlabel)  # Set the x-axis label
         self.win.addItem(self.legend)
@@ -297,6 +307,8 @@ class Qplot2d:
             self.got_data = True
             self.data = queue.get()
             xy_signal, name, color, marker, linestyle, append = self.data
+            if isinstance(color, str):
+                color = _COLORS_ON_WHITE.get(color, color)
 
             # Initialize figure upon receiving the first data
             if not self.initialized:
