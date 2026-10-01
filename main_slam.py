@@ -486,7 +486,8 @@ if __name__ == "__main__":
                     time.sleep(delta_time_sleep)
                     # Printer.yellow(f"sleeping for {delta_time_sleep} seconds - frame duration > processing duration")
 
-            if key == "q" or (key_cv == ord("q") or key_cv == 27):  # press 'q' or ESC for quitting
+            # press 'q' or ESC for quitting (the viewers' get_key() return the pressed key as a character)
+            if key == "q" or key_cv in ("q", "\x1b"):
                 break
 
     except KeyboardInterrupt:
