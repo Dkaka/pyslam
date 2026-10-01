@@ -37,6 +37,7 @@ Usage examples:
     python main_scene_from_views.py --image_dir ../data/SOH --no_3d
 """
 
+import pyslam  # first: sets the OpenMP thread settings before numpy/torch are imported
 import os
 import sys
 import cv2

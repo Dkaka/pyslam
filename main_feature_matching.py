@@ -1,4 +1,5 @@
 #!/usr/bin/env -S python3 -O
+import pyslam  # first: sets the OpenMP thread settings before numpy/torch are imported
 import sys
 import os
 import numpy as np
