@@ -113,6 +113,7 @@ tbb = ">=2021.13.0,<2022"
 tbb-devel = ">=2021.13.0,<2022"
 pyqtgraph = "*"
 pyside6 = "*"
+onnxruntime = { version = "*", build = "*cpu*" }
 viser = "*"
 vtk = ">=9.3.1,<10"
 ffmpeg = ">=7.1.1,<8"
@@ -129,7 +130,6 @@ imgviz = "==1.2.6"  # conda-forge: PyPI only has an sdist, which cannot be built
 [pypi-dependencies]
 tensorboard = "*"
 numba = "*"
-onnxruntime = "*"
 glfw = "*"
 roma = "*"
 kornia = "==0.8.2"
