@@ -110,12 +110,9 @@ PYTHON_VERSION=$($PYTHON_EXE -c "import sys; print(f\"{sys.version_info.major}.{
 # (optimizer_gtsam.cpp) are written against this version, so they must be updated together.
 GTSAM_TAG="4.3.0"
 
-# The nproc alias in bash_utils.sh is not expanded in non-interactive scripts.
-if [[ "$OSTYPE" == darwin* ]]; then
-    NUM_CORES=$(sysctl -n hw.logicalcpu)
-else
-    NUM_CORES=$(nproc)
-fi
+# Parallel jobs, limited by the available memory (see get_build_jobs in bash_utils.sh).
+NUM_CORES=$(get_build_jobs)
+echo "Building with $NUM_CORES parallel jobs (set PYSLAM_BUILD_JOBS to change)"
 
 
 WITH_MARCH_NATIVE=ON
