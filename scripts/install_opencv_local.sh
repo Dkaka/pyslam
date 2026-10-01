@@ -765,7 +765,14 @@ if [[ -d opencv/install ]]; then
     if [[ -d "$PYTHON_SOURCE_FOLDER" ]]; then
         if [[ -n "$PYTHON_SITE_PACKAGES" ]] && [[ -d "$PYTHON_SITE_PACKAGES" ]] && [[ -w "$PYTHON_SITE_PACKAGES" ]]; then
             echo "copying built python cv2 module from $PYTHON_SOURCE_FOLDER to $PYTHON_SITE_PACKAGES"
-            cp -r $PYTHON_SOURCE_FOLDER $PYTHON_SITE_PACKAGES
+            # Remove the existing cv2 package first instead of copying over it: conda hard-links package
+            # files from its cache into every environment, so writing into an existing cv2 file (as
+            # cp does) would overwrite conda's OpenCV in all environments that share it.
+            if [[ -d "$PYTHON_SITE_PACKAGES/cv2" ]]; then
+                print_yellow "Replacing $PYTHON_SITE_PACKAGES/cv2 with the built module (a separate environment is cleaner when conda's libopencv/py-opencv is installed)"
+                rm -rf "$PYTHON_SITE_PACKAGES/cv2"
+            fi
+            cp -r "$PYTHON_SOURCE_FOLDER" "$PYTHON_SITE_PACKAGES"
             if [[ $? -eq 0 ]]; then
                 print_green "Successfully deployed cv2 module to $PYTHON_SITE_PACKAGES"
             else
