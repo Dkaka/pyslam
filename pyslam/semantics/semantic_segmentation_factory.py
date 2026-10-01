@@ -30,46 +30,37 @@ from .semantic_types import SemanticFeatureType, SemanticDatasetType
 from .semantic_segmentation_types import SemanticSegmentationType
 
 from pyslam.utilities.logging import Printer
-from pyslam.utilities.system import import_from
+from pyslam.utilities.system import import_from, import_from_lazy
 
-try:
-    from .semantic_segmentation_base import SemanticSegmentationBase
-    from .semantic_segmentation_deep_lab_v3 import SemanticSegmentationDeepLabV3
-    from .semantic_segmentation_segformer import SemanticSegmentationSegformer
-    from .semantic_segmentation_clip import SemanticSegmentationCLIP
-    from .semantic_segmentation_eov_seg import SemanticSegmentationEovSeg
-    from .semantic_segmentation_detic import SemanticSegmentationDetic
-    from .semantic_segmentation_odise import SemanticSegmentationOdise
-    from .semantic_segmentation_rf_detr import SemanticSegmentationRfDetr
-    from .semantic_segmentation_yolo import SemanticSegmentationYolo
-except ModuleNotFoundError:
-    SemanticSegmentationBase = import_from(
-        "pyslam.semantics.semantic_segmentation_base", "SemanticSegmentationBase"
-    )
-    SemanticSegmentationDeepLabV3 = import_from(
-        "pyslam.semantics.semantic_segmentation_deep_lab_v3", "SemanticSegmentationDeepLabV3"
-    )
-    SemanticSegmentationSegformer = import_from(
-        "pyslam.semantics.semantic_segmentation_segformer", "SemanticSegmentationSegformer"
-    )
-    SemanticSegmentationCLIP = import_from(
-        "pyslam.semantics.semantic_segmentation_clip", "SemanticSegmentationCLIP"
-    )
-    SemanticSegmentationEovSeg = import_from(
-        "pyslam.semantics.semantic_segmentation_eov_seg", "SemanticSegmentationEovSeg"
-    )
-    SemanticSegmentationDetic = import_from(
-        "pyslam.semantics.semantic_segmentation_detic", "SemanticSegmentationDetic"
-    )
-    SemanticSegmentationOdise = import_from(
-        "pyslam.semantics.semantic_segmentation_odise", "SemanticSegmentationOdise"
-    )
-    SemanticSegmentationRfDetr = import_from(
-        "pyslam.semantics.semantic_segmentation_rf_detr", "SemanticSegmentationRfDetr"
-    )
-    SemanticSegmentationYolo = import_from(
-        "pyslam.semantics.semantic_segmentation_yolo", "SemanticSegmentationYolo"
-    )
+# Segmenters are imported on first use (import_from_lazy): importing them all here pulled in
+# torchvision/transformers/... at startup even with semantic mapping disabled.
+SemanticSegmentationBase = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_base", "SemanticSegmentationBase"
+)
+SemanticSegmentationDeepLabV3 = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_deep_lab_v3", "SemanticSegmentationDeepLabV3"
+)
+SemanticSegmentationSegformer = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_segformer", "SemanticSegmentationSegformer"
+)
+SemanticSegmentationCLIP = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_clip", "SemanticSegmentationCLIP"
+)
+SemanticSegmentationEovSeg = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_eov_seg", "SemanticSegmentationEovSeg"
+)
+SemanticSegmentationDetic = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_detic", "SemanticSegmentationDetic"
+)
+SemanticSegmentationOdise = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_odise", "SemanticSegmentationOdise"
+)
+SemanticSegmentationRfDetr = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_rf_detr", "SemanticSegmentationRfDetr"
+)
+SemanticSegmentationYolo = import_from_lazy(
+    "pyslam.semantics.semantic_segmentation_yolo", "SemanticSegmentationYolo"
+)
 
 
 from typing import TYPE_CHECKING

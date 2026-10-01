@@ -2,45 +2,15 @@ import os
 import traceback
 
 from pyslam.config_parameters import Parameters
-from pyslam.utilities.system import import_from
+from pyslam.utilities.system import import_from, import_from_lazy
 from pyslam.utilities.logging import Printer
 from pyslam.dense.volumetric_integrator_types import VolumetricIntegratorType
 
-try:
-    from .volumetric_integrator_base import VolumetricIntegratorBase
-except ImportError:
-    VolumetricIntegratorBase = import_from(
-        "pyslam.dense.volumetric_integrator_base",
-        "VolumetricIntegratorBase",
-    )
-try:
-    from .volumetric_integrator_tsdf import VolumetricIntegratorTsdf
-except ImportError:
-    VolumetricIntegratorTsdf = import_from(
-        "pyslam.dense.volumetric_integrator_tsdf",
-        "VolumetricIntegratorTsdf",
-    )
-try:
-    from .volumetric_integrator_gaussian_splatting import VolumetricIntegratorGaussianSplatting
-except ImportError:
-    VolumetricIntegratorGaussianSplatting = import_from(
-        "pyslam.dense.volumetric_integrator_gaussian_splatting",
-        "VolumetricIntegratorGaussianSplatting",
-    )
-try:
-    from .volumetric_integrator_voxel_grid import VolumetricIntegratorVoxelGrid
-except ImportError:
-    VolumetricIntegratorVoxelGrid = import_from(
-        "pyslam.dense.volumetric_integrator_voxel_grid",
-        "VolumetricIntegratorVoxelGrid",
-    )
-try:
-    from .volumetric_integrator_voxel_semantic_grid import VolumetricIntegratorVoxelSemanticGrid
-except ImportError:
-    VolumetricIntegratorVoxelSemanticGrid = import_from(
-        "pyslam.dense.volumetric_integrator_voxel_semantic_grid",
-        "VolumetricIntegratorVoxelSemanticGrid",
-    )
+VolumetricIntegratorBase = import_from_lazy("pyslam.dense.volumetric_integrator_base", "VolumetricIntegratorBase")
+VolumetricIntegratorTsdf = import_from_lazy("pyslam.dense.volumetric_integrator_tsdf", "VolumetricIntegratorTsdf")
+VolumetricIntegratorGaussianSplatting = import_from_lazy("pyslam.dense.volumetric_integrator_gaussian_splatting", "VolumetricIntegratorGaussianSplatting")
+VolumetricIntegratorVoxelGrid = import_from_lazy("pyslam.dense.volumetric_integrator_voxel_grid", "VolumetricIntegratorVoxelGrid")
+VolumetricIntegratorVoxelSemanticGrid = import_from_lazy("pyslam.dense.volumetric_integrator_voxel_semantic_grid", "VolumetricIntegratorVoxelSemanticGrid")
 kScriptPath = os.path.realpath(__file__)
 kScriptFolder = os.path.dirname(kScriptPath)
 kRootFolder = kScriptFolder + "/../.."

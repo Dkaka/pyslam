@@ -17,6 +17,8 @@
 * along with PYSLAM. If not, see <http://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations  # o3d types in annotations must not force the lazy open3d import
+
 import os
 import time
 import threading
@@ -61,7 +63,9 @@ from pyslam.depth_estimation.depth_estimator_factory import (
     DepthEstimatorType,
 )
 
-import open3d as o3d
+from pyslam.utilities.system import lazy_module
+
+o3d = lazy_module("open3d")  # heavy (pulls dash/plotly); only the dense/volumetric code paths use it
 
 import torch.multiprocessing as mp
 
