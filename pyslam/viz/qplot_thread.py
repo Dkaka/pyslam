@@ -228,15 +228,18 @@ class Qplot2d:
                 self.line_width = max(1.0, float(screen.devicePixelRatio()))
         except Exception:
             pass
-        # Legend in a light, shaded box with dark text, so that it stays readable over the plot lines
-        self.legend = pg.LegendItem(
-            brush=pg.mkBrush(240, 240, 240, 220),
+        # Legend in a light, semi-transparent box with dark text, anchored in the top-left corner of the
+        # plot area and drawn above the curves (which show through it, muted). Curves get their legend
+        # entry from their name (see drawer_refresh). The legend can be dragged.
+        self.legend = self.win.addLegend(
+            offset=(10, 10),
+            brush=pg.mkBrush(240, 240, 240, 200),
             pen=pg.mkPen(160, 160, 160),
             labelTextColor=(20, 20, 20),
         )
+        self.legend.setZValue(1000)
         self.win.setLabel("left", self.ylabel)  # Set the y-axis label
         self.win.setLabel("bottom", self.xlabel)  # Set the x-axis label
-        self.win.addItem(self.legend)
 
         self.win.showGrid(x=True, y=True, alpha=0.5)  # Show grid
 
@@ -340,8 +343,7 @@ class Qplot2d:
                     kwargs["style"] = linestyle
                 if marker != "":
                     kwargs["symbol"] = marker
-                handle = self.win.plot(**kwargs)
-                self.legend.addItem(handle, name)
+                handle = self.win.plot(**kwargs)  # also adds the legend entry (from kwargs["name"])
                 self.handle_map[name] = handle
                 self.handle_data_map[name] = handle_data
 
@@ -430,7 +432,6 @@ class Qplot2d:
             if self.ylim != [float("inf"), float("-inf")]:
                 self.win.setYRange(self.ylim[0], self.ylim[1])
 
-            self.legend.setPos(self.xlim[0], self.ylim[1])  # Adjust legend position
             self.setGridAxis()
 
     def updateMinMax(self, x, y):
