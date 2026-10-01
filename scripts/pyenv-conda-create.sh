@@ -97,7 +97,7 @@ if [[ "$OSTYPE" == darwin* ]]; then
         tbb tbb-devel libpng libtiff zlib libjpeg-turbo freetype \
         ffmpeg glew glfw boost \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        pyside6 "pytorch>=2.12" torchvision faiss-cpu "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 "pytorch>=2.12" torchvision faiss-cpu onnxruntime "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 else
     conda install $CONDA_SOLVER_OPTS -y -c conda-forge \
         pkg-config \
@@ -114,7 +114,7 @@ else
         compilers gcc_linux-64 gxx_linux-64 tbb tbb-devel \
         boost libboost-devel openblas \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        pyside6 faiss-cpu "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 faiss-cpu 'onnxruntime[build="*cpu*"]' "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 fi
 
 # Install the Python packages after the conda packages, so that conda does not replace pip-installed
@@ -123,6 +123,10 @@ fi
 # opencv-python(-headless) dist-infos, so pip does not install another cv2 over it. The qt6 build is
 # pinned because the default solve can pick the headless one, which has no cv2.imshow.
 # OpenCV 4 only: orbslam2_features needs find_package(OpenCV 4). SURF (non-free) is not available.
+# onnxruntime from conda-forge (CPU build on Linux; the default one pulls in ~4 GB of CUDA libraries):
+# pip's wheel includes Microsoft's 1DS telemetry, whose upload thread crashed Python processes at
+# exit on macOS. kornia imports it in every process that creates a feature tracker; none of
+# pyslam's users of onnxruntime needs a GPU.
 # The Qt bindings for pyqtgraph are PySide6 from conda-forge, on the same qt6-main as OpenCV, so one Qt
 # is loaded. With PyQt5 (Qt5) next to OpenCV's Qt6, macOS segfaults when both show a window (duplicate
 # Objective-C classes), and on Linux pip's PyQt5 wheel loads the system glib, which breaks conda's cv2.
@@ -132,7 +136,9 @@ fi
 # - Linux: pip wheels matching the GPU (see install_pip3_torch.sh); the newest ones drop older GPUs.
 "$PYTHON_EXE" -m pip install --upgrade pip setuptools wheel build || exit 1
 "$SCRIPTS_DIR"/install_pip3_torch.sh || { print_red "ERROR: torch installation failed"; exit 1; }
-"$PYTHON_EXE" -m pip install -e . || { print_red "ERROR: pip install -e . failed"; exit 1; }
+# googleapis-common-protos (wandb -> opentelemetry) >= 1.75 needs protobuf >= 6.33.5, newer than the
+# conda-forge protobuf that onnxruntime and the rest of this environment resolve to.
+"$PYTHON_EXE" -m pip install -e . "googleapis-common-protos<1.75" || { print_red "ERROR: pip install -e . failed"; exit 1; }
 # Fail early on conflicting native runtimes (e.g. two OpenMP libraries) rather than at the first run.
 "$PYTHON_EXE" -c "import numpy, cv2, torch" || { print_red "ERROR: 'import numpy, cv2, torch' fails in the new environment"; exit 1; }
 
