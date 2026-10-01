@@ -86,6 +86,16 @@ def import_tf_compat_v1():
             exc,
         )
 
+    # A leftover, empty tensorflow/ folder in site-packages (e.g. after `pip uninstall tensorflow`) is
+    # imported as an empty namespace package: that is not an installed TensorFlow either.
+    if getattr(_tf, "__file__", None) is None:
+        leftover = ", ".join(getattr(_tf, "__path__", []) or [])
+        _fail(
+            "TensorFlow is not installed (only an empty leftover folder was found: "
+            f"{leftover}; it can be deleted). Please install TensorFlow 2.x with compat.v1 support "
+            "(e.g., on macOS: pip install 'tensorflow-macos==2.15.*' tensorflow-metal)"
+        )
+
     # Get TensorFlow version for diagnostics
     tf_version = getattr(_tf, "__version__", "unknown")
 
