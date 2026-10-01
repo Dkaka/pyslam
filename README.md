@@ -200,6 +200,9 @@ RSS 2025 Workshop: _Unifying Visual SLAM_. The recorded talk is available [here]
 --- 
 ## Install 
 
+> **Course setup:** for the course, follow [docs/TEACHING_SETUP.md](./docs/TEACHING_SETUP.md), which
+> installs the core of pySLAM and then optional components on request, instead of `install_all.sh` below.
+
 First, clone this repo and its submodules by running 
 ```bash
 git clone --recursive https://github.com/luigifreda/pyslam.git
