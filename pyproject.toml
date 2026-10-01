@@ -44,8 +44,7 @@ dependencies = [
   "trimesh",
   "plyfile",
   "open3d",  # dense reconstruction (TSDF / voxel grid), part of the default level
-  "pyflann-py3",
-  "quaternion",
+  "pyflann-py3; platform_system != 'Darwin'",  # loop_detector_database.py uses FLANN only off macOS
   "roma",
   "kornia>=0.8.2,<0.9",
   "kornia_moons>=0.2.9",
@@ -60,9 +59,8 @@ dependencies = [
   "pyside6",
   "pyopengl>=3.1.7",
   "pygame>=2.6.0",
-  "glfw",
   "PyGLM",
-  "rerun-sdk>=0.17.0,<0.37",  # rerun-sdk 0.37 needs numpy 2
+  "rerun-sdk>=0.23,<0.23.2",  # set_time/Scalars need 0.23; from 0.23.2 rerun-sdk declares numpy>=2
   # datasets (ROS bags via mcap)
   "mcap",
   "mcap-ros1-support",
@@ -90,6 +88,7 @@ full = [
   "lpips",
   "wandb",
   "rich",  # MonoGS
+  "glfw",  # MonoGS GUI
 ]
 # TensorFlow-based features (DELF, ContextDesc, LF-Net, GeoDesc, L2-Net Keras): TensorFlow itself is
 # installed separately, in its own environment

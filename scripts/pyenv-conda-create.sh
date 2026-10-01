@@ -92,6 +92,19 @@ fi
 
 PYTHON_EXE=$(get_python_exe)
 ensure_pip "$PYTHON_EXE" || exit 1
+# The pure-Python and numeric packages of pyproject's core dependencies, from conda-forge, so that
+# `pip install -e .` below finds them installed instead of adding pip wheels next to conda's
+# libraries. They stay on pip if they depend on torch (kornia, kornia_moons, timm, fast-pytorch-kmeans:
+# conda-forge's would pull a second torch next to the pip one on Linux), if conda-forge's package
+# registers a different name than pyproject's (pyflann-py3: conda's `pyflann` has the same module,
+# and pip would install its files over conda's), if conda-forge does not have them (roma,
+# mcap-ros1/2-support), or for open3d (conda-forge's 0.20 fails at import with filament >= 1.77.2).
+CONDA_PY_PKGS=(
+    scipy matplotlib-base seaborn pandas scikit-image networkx imageio pillow h5py
+    pyyaml hjson-py ujson munch yacs configargparse ordered-set termcolor tqdm psutil packaging
+    requests gdown jinja2 six typing_extensions numba evo trimesh plyfile einops opt_einsum
+    tensorboard pyqtgraph pyopengl pygame pyglm "rerun-sdk>=0.23,<0.23.2" mcap
+)
 # NOTE: these are the "system" packages that are needed within conda to build code from source
 if [[ "$OSTYPE" == darwin* ]]; then
     # macOS: use clang from Xcode; avoid Linux-only packages
@@ -100,7 +113,8 @@ if [[ "$OSTYPE" == darwin* ]]; then
         tbb tbb-devel libpng libtiff zlib libjpeg-turbo freetype \
         ffmpeg glew glfw boost \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        pyside6 "pytorch>=2.12" torchvision faiss-cpu onnxruntime "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 "pytorch>=2.12" torchvision faiss-cpu onnxruntime "numpy<2" \
+        "${CONDA_PY_PKGS[@]}" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 else
     conda install $CONDA_SOLVER_OPTS $CONDA_CHANNEL_OPTS -y \
         pkg-config \
@@ -117,7 +131,8 @@ else
         compilers gcc_linux-64 gxx_linux-64 tbb tbb-devel \
         boost libboost-devel openblas \
         'libopencv[version=">=4.12,<5",build="qt6*"]' 'py-opencv[version=">=4.12,<5",build="qt6*"]' \
-        pyside6 faiss-cpu 'onnxruntime[build="*cpu*"]' "numpy<2" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
+        pyside6 faiss-cpu 'onnxruntime[build="*cpu*"]' "numpy<2" \
+        "${CONDA_PY_PKGS[@]}" || { print_red "ERROR: conda install of the build packages failed"; exit 1; }
 fi
 
 # Install the Python packages after the conda packages, so that conda does not replace pip-installed
