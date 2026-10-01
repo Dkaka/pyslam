@@ -59,7 +59,7 @@ From now on, always run `conda activate pyslam` before using pySLAM.
 Run these from the `pyslam` folder, in this order, with the environment activated:
 
 ```bash
-bash scripts/install_gtsam.sh                       # GTSAM (~10 min)
+bash scripts/install_gtsam.sh                       # GTSAM (10-15 min)
 bash scripts/install_json_nlohmann.sh
 bash scripts/install_qhull.sh
 (cd thirdparty/orbslam2_features && ./build.sh)     # ORB features
@@ -84,8 +84,8 @@ step that already succeeded is safe.
 
 ```bash
 python scripts/check_pybind11_abi.py                # all native modules must report one ABI: "OK"
-python -m pytest -q test/gtsam/test_gtsam_factors_jacobians.py test/gtsam/test_optimize_pose.py test/gtsam/test_optimize_sim3.py
-python -m pytest -q test/g2o/test_optimize_pose.py test/g2o/test_optimize_sim3.py   # optimiser tests
+python -m pytest -q -p no:warnings test/gtsam/test_gtsam_factors_jacobians.py test/gtsam/test_optimize_pose.py test/gtsam/test_optimize_sim3.py
+python -m pytest -q -p no:warnings test/g2o/test_optimize_pose.py test/g2o/test_optimize_sim3.py   # optimiser tests
 python main_slam.py                                 # SLAM on the bundled KITTI 06 video
 ```
 
