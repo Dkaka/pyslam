@@ -83,7 +83,21 @@ class AlikedFeature2D(BaseFeature2D):
 
     def extract(self, image):
         tensor = numpy_image_to_torch(image)
-        feats = self.ALIKED.extract(tensor.to(self.device))
+        try:
+            feats = self.ALIKED.extract(tensor.to(self.device))
+        except NotImplementedError as e:
+            if self.device.type != "mps":
+                raise
+            # ALIKED uses torchvision's deform_conv2d, which has no MPS kernel. pyslam enables
+            # PYTORCH_ENABLE_MPS_FALLBACK when imported, but torch only reads it at its first import, so
+            # a program that imports torch before pyslam gets here: run ALIKED on the CPU instead.
+            Printer.orange(
+                f"AlikedFeature2D: {str(e).splitlines()[0]}\n"
+                "Running ALIKED on the CPU (import pyslam before torch to use MPS with its CPU fallback)."
+            )
+            self.device = torch.device("cpu")
+            self.ALIKED = self.ALIKED.to(self.device)
+            feats = self.ALIKED.extract(tensor.to(self.device))
         # print(f'feats: {feats}')
         kps = feats["keypoints"].cpu().numpy()[0]
         des = feats["descriptors"].cpu().numpy()[0]

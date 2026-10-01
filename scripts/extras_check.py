@@ -35,8 +35,10 @@ import json, os, sys, time, traceback
 kind, name = sys.argv[1], sys.argv[2]
 out = {"status": "FAIL"}
 try:
+    # import pyslam before torch: on macOS pyslam sets PYTORCH_ENABLE_MPS_FALLBACK, which torch only
+    # reads when it is first imported (otherwise e.g. ALIKED fails on MPS with NotImplementedError)
+    from pyslam.config import Config  # noqa: F401  (also sets up the thirdparty paths)
     import cv2, numpy as np, torch
-    from pyslam.config import Config  # noqa: F401  (sets up the thirdparty paths)
     data = os.path.join(os.getcwd(), "test", "data")
     read = lambda f: cv2.imread(os.path.join(data, f))
     t0 = time.time()
@@ -65,7 +67,12 @@ try:
         if not same > diff:
             raise RuntimeError(out["result"] + " does not hold")
     out["seconds"] = round(time.time() - t0, 1)
-    out["device"] = "cuda" if torch.cuda.is_available() and torch.cuda.max_memory_allocated() > 0 else "cpu"
+    if torch.cuda.is_available() and torch.cuda.max_memory_allocated() > 0:
+        out["device"] = "cuda"
+    elif torch.backends.mps.is_available() and torch.mps.current_allocated_memory() > 0:
+        out["device"] = "mps"
+    else:
+        out["device"] = "cpu"
     out["status"] = "OK"
 except BaseException as e:  # noqa: BLE001
     out["error"] = f"{type(e).__name__}: {e}".splitlines()[0][:200]
