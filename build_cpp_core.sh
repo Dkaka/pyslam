@@ -26,6 +26,14 @@ print_blue "Building pySLAM C++ core"
 print_blue '================================================'
 
 cd "$ROOT_DIR/pyslam/slam/cpp"
-./build.sh
+# Remove the previously built module first: if this build fails, a stale cpp_core from older
+# sources must not stay importable and look like a successful build.
+rm -f lib/cpp_core*.so lib/cpp_core*.pyd
+./build.sh || { print_red "ERROR: building the pySLAM C++ core failed (see the messages above)"; cd "$STARTING_DIR"; exit 1; }
+if ! compgen -G "lib/cpp_core*.so" >/dev/null && ! compgen -G "lib/cpp_core*.pyd" >/dev/null; then
+    print_red "ERROR: the build finished but lib/cpp_core*.so was not produced"
+    cd "$STARTING_DIR"
+    exit 1
+fi
 
 cd "$STARTING_DIR"
