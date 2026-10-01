@@ -34,20 +34,11 @@ from pyslam.local_features.feature_types import FeatureDescriptorTypes
 from pyslam.slam.feature_tracker_shared import SlamFeatureManagerInfo
 
 from .loop_detector_base import LoopDetectorBase
-from .loop_detector_dbow3 import LoopDetectorDBoW3
-from .loop_detector_dbow2 import LoopDetectorDBoW2
-from .loop_detector_obindex2 import LoopDetectorOBIndex2
-from .loop_detector_ibow import LoopDetectorIBow
-from .loop_detector_vpr import (
-    LoopDetectorHdcDelf,
-    LoopDetectorEigenPlaces,
-    LoopDetectorNetVLAD,
-    LoopDetectorSad,
-    LoopDetectorAlexNet,
-    LoopDetectorCosPlace,
-    LoopDetectorMegaloc,
-)
-from .loop_detector_vlad import LoopDetectorVlad
+
+# The loop detector classes are imported in loop_detector_factory(), only for the selected type: their
+# modules need optional native or deep-learning packages (pydbow2, pydbow3, pyibow/pyobindex2, torch
+# models, tensorflow), and importing them all here made every detector's package a requirement of
+# main_slam.py, even with the default DBOW3.
 from .loop_detector_vocabulary import (
     DBow3OrbVocabularyData,
     DBow2OrbVocabularyData,
@@ -304,38 +295,62 @@ def loop_detector_factory(
                 raise ValueError(
                     "loop_detector_factory: local_feature_manager.descriptor_type must be ORB2 or ORB"
                 )
+        from .loop_detector_dbow2 import LoopDetectorDBoW2
+
         loop_detector = LoopDetectorDBoW2(
             vocabulary_data=vocabulary_data, local_feature_manager=local_feature_manager
         )
     elif global_descriptor_type == GlobalDescriptorType.DBOW3:
+        from .loop_detector_dbow3 import LoopDetectorDBoW3
+
         loop_detector = LoopDetectorDBoW3(
             vocabulary_data=vocabulary_data, local_feature_manager=local_feature_manager
         )
     elif global_descriptor_type == GlobalDescriptorType.VLAD:
+        from .loop_detector_vlad import LoopDetectorVlad
+
         loop_detector = LoopDetectorVlad(
             vocabulary_data=vocabulary_data, local_feature_manager=local_feature_manager
         )
     elif global_descriptor_type == GlobalDescriptorType.OBINDEX2:
+        from .loop_detector_obindex2 import LoopDetectorOBIndex2
+
         loop_detector = LoopDetectorOBIndex2(
             local_feature_manager=local_feature_manager, slam_info=slam_info
         )
     elif global_descriptor_type == GlobalDescriptorType.IBOW:
+        from .loop_detector_ibow import LoopDetectorIBow
+
         loop_detector = LoopDetectorIBow(
             local_feature_manager=local_feature_manager, slam_info=slam_info
         )
     elif global_descriptor_type == GlobalDescriptorType.HDC_DELF:
+        from .loop_detector_vpr import LoopDetectorHdcDelf
+
         loop_detector = LoopDetectorHdcDelf(local_feature_manager=local_feature_manager)
     elif global_descriptor_type == GlobalDescriptorType.SAD:
+        from .loop_detector_vpr import LoopDetectorSad
+
         loop_detector = LoopDetectorSad(local_feature_manager=local_feature_manager)
     elif global_descriptor_type == GlobalDescriptorType.ALEXNET:
+        from .loop_detector_vpr import LoopDetectorAlexNet
+
         loop_detector = LoopDetectorAlexNet(local_feature_manager=local_feature_manager)
     elif global_descriptor_type == GlobalDescriptorType.NETVLAD:
+        from .loop_detector_vpr import LoopDetectorNetVLAD
+
         loop_detector = LoopDetectorNetVLAD(local_feature_manager=local_feature_manager)
     elif global_descriptor_type == GlobalDescriptorType.COSPLACE:
+        from .loop_detector_vpr import LoopDetectorCosPlace
+
         loop_detector = LoopDetectorCosPlace(local_feature_manager=local_feature_manager)
     elif global_descriptor_type == GlobalDescriptorType.EIGENPLACES:
+        from .loop_detector_vpr import LoopDetectorEigenPlaces
+
         loop_detector = LoopDetectorEigenPlaces(local_feature_manager=local_feature_manager)
     elif global_descriptor_type == GlobalDescriptorType.MEGALOC:
+        from .loop_detector_vpr import LoopDetectorMegaloc
+
         loop_detector = LoopDetectorMegaloc(local_feature_manager=local_feature_manager)
     else:
         raise ValueError("loop_detector_factory: unknown global_descriptor_type")

@@ -107,6 +107,26 @@ class MissingImport:
         raise RuntimeError(self.message())
 
 
+def import_native_module(name, build_hint):
+    """Import a pySLAM native (C++/pybind11) module, or raise ModuleNotFoundError with how to build it.
+
+    When the module is not built, Python may instead import its thirdparty source folder (on sys.path)
+    as an empty namespace package, which then fails later with a confusing AttributeError: treat that
+    as not built too.
+    """
+    import importlib
+
+    try:
+        module = importlib.import_module(name)
+    except ModuleNotFoundError as e:
+        if e.name != name:
+            raise
+        module = None
+    if module is None or getattr(module, "__file__", None) is None:
+        raise ModuleNotFoundError(f"The native module '{name}' is not built: {build_hint}", name=name)
+    return module
+
+
 # This function check and exec 'from module import name' and directly return the 'name'.'method'.
 # The method is used to directly return a 'method' of 'name' (i.e. 'module'.'name'.'method')
 # N.B.: if a method is needed you CAN'T
