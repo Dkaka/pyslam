@@ -253,17 +253,10 @@ find_package(nlohmann_json REQUIRED)
 # Add pybind11 from thirdparty
 add_subdirectory("${PYSLAM_ROOT}/thirdparty/pybind11" pybind11)
 set(pybind11_INCLUDE_DIRS "${PYSLAM_ROOT}/thirdparty/pybind11/include")
-# Use the bundled pybind11 headers even when another pybind11 is on the include path: e.g. conda's
-# pytorch depends on pybind11 3.x, whose headers land in $CONDA_PREFIX/include (also the TBB include
-# dir on macOS), and cpp_core must be built with the pybind11 version it was written for (internals
-# ABI shared with g2o and orbslam2_features). The pybind11 targets pass their include dir as -isystem,
-# which is searched after any -I dir and cancels a -I for the same dir: drop that, and prepend -I.
-foreach(_pyslam_pybind11_target pybind11_headers pybind11_module pybind11_embed)
-    if(TARGET ${_pyslam_pybind11_target})
-        set_property(TARGET ${_pyslam_pybind11_target} PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "")
-    endif()
-endforeach()
-include_directories(BEFORE ${pybind11_INCLUDE_DIRS})
+# Build against the bundled pybind11 even when another one is on the include path (e.g. conda's
+# pytorch brings pybind11 headers into $CONDA_PREFIX/include): see cmake/pyslam_pybind11.cmake
+include("${PYSLAM_ROOT}/cmake/pyslam_pybind11.cmake")
+pyslam_use_bundled_pybind11("${PYSLAM_ROOT}/thirdparty/pybind11")
 
 # Add Python development
 if (USE_PYTHON)

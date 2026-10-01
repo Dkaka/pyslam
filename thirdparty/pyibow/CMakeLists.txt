@@ -42,6 +42,8 @@ if(BUILD_WITH_MARCH_NATIVE)
 endif() 
 
 add_subdirectory(modules/pybind11)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/pyslam_pybind11.cmake")
+pyslam_use_bundled_pybind11("${CMAKE_CURRENT_SOURCE_DIR}/modules/pybind11")
 
 find_package(OpenCV REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem serialization)
