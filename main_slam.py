@@ -18,6 +18,7 @@
 * along with PYSLAM. If not, see <http://www.gnu.org/licenses/>.
 """
 
+import pyslam  # first: sets the OpenMP thread settings before numpy/torch are imported
 import cv2
 import time
 import os
