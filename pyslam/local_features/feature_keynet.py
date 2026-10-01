@@ -28,6 +28,8 @@ import kornia as K
 import kornia.feature as KF
 import numpy as np
 import torch
+
+from pyslam.utilities.torch import get_torch_device
 from kornia_moons.feature import *
 from kornia_moons.viz import *
 
@@ -101,9 +103,11 @@ class KeyNetHardNet(KF.LocalFeature):
 
 # Interface for pySLAM
 class KeyNetDescFeature2D(BaseFeature2D):
-    def __init__(self, num_features=2000, device=K.utils.get_cuda_or_mps_device_if_available()):
+    def __init__(self, num_features=2000, device=None):
         print("Using KeyNetDescFeature2D")
-        self.device = device
+        # kornia >= 0.8.3 no longer imports kornia.utils with `import kornia`, so the default device
+        # (K.utils.get_cuda_or_mps_device_if_available(), evaluated at import) failed there
+        self.device = device if device is not None else get_torch_device()
         self.num_features = num_features
         self.keynet_conf = keynet_default_config
         self.feature = (
