@@ -30,7 +30,7 @@ from pyslam.config_parameters import Parameters
 from .feature_types import FeatureDetectorTypes, FeatureDescriptorTypes, FeatureInfo
 
 from pyslam.utilities.logging import Printer
-from pyslam.utilities.system import import_from
+from pyslam.utilities.system import import_from, import_from_lazy
 from pyslam.utilities.features import (
     unpackSiftOctaveKps,
     UnpackOctaveMethod,
@@ -55,33 +55,33 @@ from .feature_shitomasi import ShiTomasiDetector
 
 
 # import and check
-SuperPointFeature2D = import_from("pyslam.local_features.feature_superpoint", "SuperPointFeature2D")
-XfeatFeature2D = import_from("pyslam.local_features.feature_xfeat", "XFeat2D")
-TfeatFeature2D = import_from("pyslam.local_features.feature_tfeat", "TfeatFeature2D")
-Orbslam2Feature2D = import_from("pyslam.local_features.feature_orbslam2", "Orbslam2Feature2D")
-HardnetFeature2D = import_from("pyslam.local_features.feature_hardnet", "HardnetFeature2D")
-GeodescFeature2D = import_from("pyslam.local_features.feature_geodesc", "GeodescFeature2D")
-SosnetFeature2D = import_from("pyslam.local_features.feature_sosnet", "SosnetFeature2D")
+SuperPointFeature2D = import_from_lazy("pyslam.local_features.feature_superpoint", "SuperPointFeature2D")
+XfeatFeature2D = import_from_lazy("pyslam.local_features.feature_xfeat", "XFeat2D")
+TfeatFeature2D = import_from_lazy("pyslam.local_features.feature_tfeat", "TfeatFeature2D")
+Orbslam2Feature2D = import_from_lazy("pyslam.local_features.feature_orbslam2", "Orbslam2Feature2D")
+HardnetFeature2D = import_from_lazy("pyslam.local_features.feature_hardnet", "HardnetFeature2D")
+GeodescFeature2D = import_from_lazy("pyslam.local_features.feature_geodesc", "GeodescFeature2D")
+SosnetFeature2D = import_from_lazy("pyslam.local_features.feature_sosnet", "SosnetFeature2D")
 if False:
     L2NetKerasFeature2D = import_from(
         "pyslam.local_features.feature_l2net_keras", "L2NetKerasFeature2D"
     )  # not used at present time
-L2NetFeature2D = import_from("pyslam.local_features.feature_l2net", "L2NetFeature2D")
-LogpolarFeature2D = import_from("pyslam.local_features.feature_logpolar", "LogpolarFeature2D")
-D2NetFeature2D = import_from("pyslam.local_features.feature_d2net", "D2NetFeature2D")
-DelfFeature2D = import_from("pyslam.local_features.feature_delf", "DelfFeature2D")
-ContextDescFeature2D = import_from(
+L2NetFeature2D = import_from_lazy("pyslam.local_features.feature_l2net", "L2NetFeature2D")
+LogpolarFeature2D = import_from_lazy("pyslam.local_features.feature_logpolar", "LogpolarFeature2D")
+D2NetFeature2D = import_from_lazy("pyslam.local_features.feature_d2net", "D2NetFeature2D")
+DelfFeature2D = import_from_lazy("pyslam.local_features.feature_delf", "DelfFeature2D")
+ContextDescFeature2D = import_from_lazy(
     "pyslam.local_features.feature_contextdesc", "ContextDescFeature2D"
 )
-LfNetFeature2D = import_from("pyslam.local_features.feature_lfnet", "LfNetFeature2D")
-R2d2Feature2D = import_from("pyslam.local_features.feature_r2d2", "R2d2Feature2D")
-KeyNetDescFeature2D = import_from("pyslam.local_features.feature_keynet", "KeyNetDescFeature2D")
-DiskFeature2D = import_from("pyslam.local_features.feature_disk", "DiskFeature2D")
-AlikedFeature2D = import_from("pyslam.local_features.feature_aliked", "AlikedFeature2D")
-LightGlueSIFTFeature2D = import_from(
+LfNetFeature2D = import_from_lazy("pyslam.local_features.feature_lfnet", "LfNetFeature2D")
+R2d2Feature2D = import_from_lazy("pyslam.local_features.feature_r2d2", "R2d2Feature2D")
+KeyNetDescFeature2D = import_from_lazy("pyslam.local_features.feature_keynet", "KeyNetDescFeature2D")
+DiskFeature2D = import_from_lazy("pyslam.local_features.feature_disk", "DiskFeature2D")
+AlikedFeature2D = import_from_lazy("pyslam.local_features.feature_aliked", "AlikedFeature2D")
+LightGlueSIFTFeature2D = import_from_lazy(
     "pyslam.local_features.feature_lightglue_sift", "LightGlueSIFTFeature2D"
 )
-KeyNetAffNetHardNetFeature2D = import_from(
+KeyNetAffNetHardNetFeature2D = import_from_lazy(
     "pyslam.local_features.feature_keynet_affnet_hardnet", "KeyNetAffNetHardNetFeature2D"
 )
 # Mast3rFeature2D = import_from('pyslam.local_features.feature_mast3r', 'Mast3rFeature2D')

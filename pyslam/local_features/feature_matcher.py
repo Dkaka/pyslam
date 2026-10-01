@@ -27,10 +27,9 @@ import torch
 from pyslam.utilities.torch import get_torch_device
 
 from pyslam.utilities.logging import Printer
-from pyslam.utilities.system import import_from
+from pyslam.utilities.system import import_from, import_from_lazy
 from pyslam.utilities.data_management import AtomicCounter
 from pyslam.utilities.serialization import SerializableEnum, register_class
-from pyslam.utilities.dust3r import Dust3rImagePreprocessor
 from pyslam.config_parameters import Parameters
 
 from collections import defaultdict
@@ -48,8 +47,8 @@ config.cfg.set_lib("xfeat")
 config.cfg.set_lib("lightglue")
 config.cfg.set_lib("mast3r")
 
-XFeat = import_from("modules.xfeat", "XFeat")
-LightGlue = import_from("lightglue", "LightGlue")
+XFeat = import_from_lazy("modules.xfeat", "XFeat")
+LightGlue = import_from_lazy("lightglue", "LightGlue")
 
 kScriptPath = os.path.realpath(__file__)
 kScriptFolder = os.path.dirname(kScriptPath)
@@ -679,6 +678,8 @@ class FeatureMatcher:
             if img2.ndim == 2:
                 img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2RGB)
             imgs = [img1, img2]
+            from pyslam.utilities.dust3r import Dust3rImagePreprocessor  # only the Mast3R matcher needs it (heavy import)
+
             dust3r_preprocessor = Dust3rImagePreprocessor(inference_size=self.inference_size)
             # imgs_preproc = dust3r_preprocess_images(imgs, size=self.inference_size)
             imgs_preproc = dust3r_preprocessor.preprocess_images(imgs)

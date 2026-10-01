@@ -28,54 +28,18 @@ import platform
 
 from pyslam.slam import Camera
 from pyslam.io.dataset_types import DatasetEnvironmentType
-from pyslam.utilities.system import import_from
+from pyslam.utilities.system import import_from, import_from_lazy
 
 from pyslam.utilities.serialization import SerializableEnum, register_class
 
 from .depth_estimator_base import DepthEstimator, DepthEstimatorSgbm
 
-try:
-    from .depth_estimator_depth_pro import DepthEstimatorDepthPro
-except ImportError:
-    DepthEstimatorDepthPro = import_from(
-        "pyslam.depth_estimation.depth_estimator_depth_pro",
-        "DepthEstimatorDepthPro",
-    )
-try:
-    from .depth_estimator_depth_anything_v2 import DepthEstimatorDepthAnythingV2
-except ImportError:
-    DepthEstimatorDepthAnythingV2 = import_from(
-        "pyslam.depth_estimation.depth_estimator_depth_anything_v2",
-        "DepthEstimatorDepthAnythingV2",
-    )
-try:
-    from .depth_estimator_depth_anything_v3 import DepthEstimatorDepthAnythingV3
-except ImportError:
-    DepthEstimatorDepthAnythingV3 = import_from(
-        "pyslam.depth_estimation.depth_estimator_depth_anything_v3",
-        "DepthEstimatorDepthAnythingV3",
-    )
-try:
-    from .depth_estimator_raft_stereo import DepthEstimatorRaftStereo
-except ImportError:
-    DepthEstimatorRaftStereo = import_from(
-        "pyslam.depth_estimation.depth_estimator_raft_stereo",
-        "DepthEstimatorRaftStereo",
-    )
-try:
-    from .depth_estimator_crestereo_megengine import DepthEstimatorCrestereoMegengine
-except ImportError:
-    DepthEstimatorCrestereoMegengine = import_from(
-        "pyslam.depth_estimation.depth_estimator_crestereo_megengine",
-        "DepthEstimatorCrestereoMegengine",
-    )
-try:
-    from .depth_estimator_crestereo_pytorch import DepthEstimatorCrestereoPytorch
-except ImportError:
-    DepthEstimatorCrestereoPytorch = import_from(
-        "pyslam.depth_estimation.depth_estimator_crestereo_pytorch",
-        "DepthEstimatorCrestereoPytorch",
-    )
+DepthEstimatorDepthPro = import_from_lazy("pyslam.depth_estimation.depth_estimator_depth_pro", "DepthEstimatorDepthPro")
+DepthEstimatorDepthAnythingV2 = import_from_lazy("pyslam.depth_estimation.depth_estimator_depth_anything_v2", "DepthEstimatorDepthAnythingV2")
+DepthEstimatorDepthAnythingV3 = import_from_lazy("pyslam.depth_estimation.depth_estimator_depth_anything_v3", "DepthEstimatorDepthAnythingV3")
+DepthEstimatorRaftStereo = import_from_lazy("pyslam.depth_estimation.depth_estimator_raft_stereo", "DepthEstimatorRaftStereo")
+DepthEstimatorCrestereoMegengine = import_from_lazy("pyslam.depth_estimation.depth_estimator_crestereo_megengine", "DepthEstimatorCrestereoMegengine")
+DepthEstimatorCrestereoPytorch = import_from_lazy("pyslam.depth_estimation.depth_estimator_crestereo_pytorch", "DepthEstimatorCrestereoPytorch")
 
 
 kScriptPath = os.path.realpath(__file__)

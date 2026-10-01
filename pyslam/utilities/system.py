@@ -158,6 +158,62 @@ def import_from(module, name, method=None, debug=False):
         return MissingImport(module, name, e)
 
 
+class _LazyImport:
+    """Stand-in returned by import_from_lazy(): runs import_from() on first use (call, attribute
+    access or truth test) and then behaves like the imported object (or its MissingImport)."""
+
+    def __init__(self, module, name, method=None):
+        self._lazy_args = (module, name, method)
+        self._lazy_target = None
+        self._lazy_done = False
+
+    def _resolve(self):
+        if not self._lazy_done:
+            module, name, method = self._lazy_args
+            self._lazy_target = import_from(module, name, method)
+            self._lazy_done = True
+        return self._lazy_target
+
+    def __call__(self, *args, **kwargs):
+        return self._resolve()(*args, **kwargs)
+
+    def __getattr__(self, attr):
+        if attr.startswith("_lazy"):
+            raise AttributeError(attr)
+        return getattr(self._resolve(), attr)
+
+    def __bool__(self):
+        return bool(self._resolve())
+
+    def __repr__(self):
+        module, name, _ = self._lazy_args
+        return f"<lazy {module}.{name}: {self._lazy_target!r}>" if self._lazy_done else f"<lazy {module}.{name}>"
+
+
+def import_from_lazy(module, name, method=None):
+    """Like import_from(), but the import happens on first use. Use it for optional components, so
+    that they are imported (and their warnings printed) only if the configuration selects them."""
+    return _LazyImport(module, name, method)
+
+
+def lazy_module(name):
+    """Return module `name` imported lazily (importlib.util.LazyLoader): the module code runs on the
+    first attribute access. For heavy optional dependencies used only in some code paths."""
+    import importlib.util
+
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.find_spec(name)
+    if spec is None:
+        raise ModuleNotFoundError(f"No module named '{name}'", name=name)
+    loader = importlib.util.LazyLoader(spec.loader)
+    spec.loader = loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    loader.exec_module(module)
+    return module
+
+
 def get_opencv_version():
     opencv_major = int(cv2.__version__.split(".")[0])
     opencv_minor = int(cv2.__version__.split(".")[1])
