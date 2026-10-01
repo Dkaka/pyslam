@@ -26,6 +26,8 @@ endif()
 
 # Add pybind11 as a proper target
 add_subdirectory(${PROJECT_SOURCE_DIR}/EXTERNAL/pybind11 ${CMAKE_BINARY_DIR}/pybind11_build)
+include("${PROJECT_SOURCE_DIR}/../../cmake/pyslam_pybind11.cmake")
+pyslam_use_bundled_pybind11("${PROJECT_SOURCE_DIR}/EXTERNAL/pybind11")
 
 message(STATUS "OpenGL_LIBRARIES: ${OpenGL_LIBRARIES}")
 message(STATUS "GLUT_LIBRARIES: ${GLUT_LIBRARIES}")

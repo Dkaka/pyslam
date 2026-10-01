@@ -29,7 +29,8 @@ message(STATUS "Using Python3: ${Python3_EXECUTABLE}")
 
 # Make sure your pybind11 is used, not ROS 2's
 add_subdirectory(pybind11)
-include_directories(BEFORE ${PROJECT_SOURCE_DIR}/pybind11/include)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/pyslam_pybind11.cmake")
+pyslam_use_bundled_pybind11("${CMAKE_CURRENT_SOURCE_DIR}/pybind11")
 
 # ROS 2 dependencies
 find_package(ament_cmake REQUIRED)
