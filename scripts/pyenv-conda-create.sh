@@ -54,6 +54,7 @@ CONDA_SOLVER_OPTS=""
 CONDA_BASE_PYTHON="$(conda info --base)/bin/python"
 if conda create --help 2>/dev/null | grep -q -- "--solver" && "$CONDA_BASE_PYTHON" -c "import conda_libmamba_solver" &>/dev/null; then
     CONDA_SOLVER_OPTS="--solver=libmamba"
+    print_green "Using the libmamba solver"
 else
     print_yellow "WARNING: the libmamba solver is not available, so the environment solve may be slow."
     print_yellow "         (Update conda to >= 23.10, or install conda-libmamba-solver in base yourself.)"
