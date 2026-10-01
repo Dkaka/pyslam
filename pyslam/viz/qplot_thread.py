@@ -214,6 +214,15 @@ class Qplot2d:
         self.screen_width, self.screen_height = self.get_screen_dimensions()
 
         self.win = pg.PlotWidget(title=self.title)  # Create a plot widget
+        # Line width in logical pixels, scaled by the screen's device-pixel ratio: pyqtgraph's default
+        # 1-px pens look hair-thin on high-DPI (e.g. macOS Retina, 2x) screens. 1 on standard screens.
+        self.line_width = 1.0
+        try:
+            screen = self.win.screen() or QtWidgets.QApplication.primaryScreen()
+            if screen is not None:
+                self.line_width = max(1.0, float(screen.devicePixelRatio()))
+        except Exception:
+            pass
         self.legend = pg.LegendItem()
         self.win.setLabel("left", self.ylabel)  # Set the y-axis label
         self.win.setLabel("bottom", self.xlabel)  # Set the x-axis label
@@ -310,10 +319,10 @@ class Qplot2d:
             else:
                 if append:
                     handle_data = ([xy_signal[0]], [xy_signal[1]])  # append the first sample
-                    kwargs = {"x": [xy_signal[0]], "y": [xy_signal[1]], "pen": color, "name": name}
+                    kwargs = {"x": [xy_signal[0]], "y": [xy_signal[1]], "pen": pg.mkPen(color, width=self.line_width), "name": name}
                 else:
                     handle_data = (xy_signal[0], xy_signal[1])
-                    kwargs = {"x": xy_signal[0], "y": xy_signal[1], "pen": color, "name": name}
+                    kwargs = {"x": xy_signal[0], "y": xy_signal[1], "pen": pg.mkPen(color, width=self.line_width), "name": name}
                     self.updateMinMax(xy_signal[0], xy_signal[1])
                 if linestyle != "":
                     kwargs["style"] = linestyle

@@ -111,6 +111,11 @@ if __name__ == "__main__":
         help="Do not append date to output directory",
     )
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print the full camera and configuration dumps (JSON)",
+    )
     args = parser.parse_args()
 
     if args.config_path:
@@ -160,7 +165,15 @@ if __name__ == "__main__":
     )
 
     camera = PinholeCamera(config)
-    Printer.green(f"Camera: {json.dumps(camera.to_json(), indent=4, cls=SerializableEnumEncoder)}")
+    if args.verbose:
+        Printer.green(f"Camera: {json.dumps(camera.to_json(), indent=4, cls=SerializableEnumEncoder)}")
+    else:
+        cam = camera.to_json()
+        Printer.green(
+            f"Camera: {cam.get('width')}x{cam.get('height')}, fx={cam.get('fx')} fy={cam.get('fy')} "
+            f"cx={cam.get('cx')} cy={cam.get('cy')}, fps={cam.get('fps')}, "
+            f"sensor={getattr(dataset.sensor_type, 'name', dataset.sensor_type)} (--verbose for details)"
+        )
 
     # Select your tracker configuration (see the file feature_tracker_configs.py)
     # FeatureTrackerConfigs: SHI_TOMASI_ORB, FAST_ORB, ORB, ORB2, ORB2_FREAK, ORB2_BEBLID, BRISK, AKAZE, FAST_FREAK, SIFT, ROOT_SIFT, SURF, KEYNET, SUPERPOINT, CONTEXTDESC, LIGHTGLUE, XFEAT, XFEAT_XFEAT
@@ -211,18 +224,42 @@ if __name__ == "__main__":
             config.semantic_mapping_config_name
         )  # Override the semantic mapping configuration from the `settings` file
 
-    Printer.green(
-        "feature_tracker_config: ",
-        json.dumps(feature_tracker_config, indent=4, cls=SerializableEnumEncoder),
-    )
-    Printer.green(
-        "loop_detection_config: ",
-        json.dumps(loop_detection_config, indent=4, cls=SerializableEnumEncoder),
-    )
-    if Parameters.kDoSparseSemanticMappingAndSegmentation:
+    if args.verbose:
         Printer.green(
-            "semantic_mapping_config: ",
-            json.dumps(semantic_mapping_config, indent=4, cls=SerializableEnumEncoder),
+            "feature_tracker_config: ",
+            json.dumps(feature_tracker_config, indent=4, cls=SerializableEnumEncoder),
+        )
+        Printer.green(
+            "loop_detection_config: ",
+            json.dumps(loop_detection_config, indent=4, cls=SerializableEnumEncoder),
+        )
+        if Parameters.kDoSparseSemanticMappingAndSegmentation:
+            Printer.green(
+                "semantic_mapping_config: ",
+                json.dumps(semantic_mapping_config, indent=4, cls=SerializableEnumEncoder),
+            )
+    else:
+
+        def _config_name(cfg, key):
+            value = cfg.get(key) if isinstance(cfg, dict) else None
+            return getattr(value, "name", value)
+
+        loop_detector_name = (
+            _config_name(loop_detection_config, "global_descriptor_type")
+            if loop_detection_config is not None
+            else "disabled"
+        )
+        Printer.green(
+            f"Features: detector={_config_name(feature_tracker_config, 'detector_type')} "
+            f"descriptor={_config_name(feature_tracker_config, 'descriptor_type')} "
+            f"num_features={feature_tracker_config.get('num_features')}, "
+            f"loop detector: {loop_detector_name}"
+            + (
+                f", semantic mapping: {_config_name(semantic_mapping_config, 'semantic_mapping_type') or 'on'}"
+                if Parameters.kDoSparseSemanticMappingAndSegmentation
+                else ""
+            )
+            + " (--verbose for details)"
         )
     config.feature_tracker_config = feature_tracker_config
     config.loop_detection_config = loop_detection_config
