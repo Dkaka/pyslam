@@ -185,11 +185,20 @@ TARGET_FOLDER="$ROOT_DIR/$TARGET_FOLDER"
 # ====================================================
 print_blue  "Configuring and building $TARGET_FOLDER/opencv ..."
 
-#pip3 install --upgrade pip
-pip3 uninstall -y opencv-python
-pip3 uninstall -y opencv-contrib-python
-
-pip3 install --upgrade numpy
+if [[ -n "$CONDA_PREFIX" && -x "$CONDA_PREFIX/bin/python" ]]; then
+    PYTHON_EXE="$CONDA_PREFIX/bin/python"
+else
+    PYTHON_EXE=$(command -v python3)
+fi
+# Remove pip-installed OpenCV wheels (their cv2 would shadow the one built here). Conda's
+# libopencv/py-opencv register opencv-python dist-infos too (INSTALLER=conda): leave those to conda.
+for pkg in opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless; do
+    if [[ "$("$PYTHON_EXE" -c "import importlib.metadata as m; print(m.distribution('$pkg').read_text('INSTALLER') or '')" 2>/dev/null | tr -d '[:space:]')" == pip ]]; then
+        "$PYTHON_EXE" -m pip uninstall -y "$pkg"
+    fi
+done
+# numpy is needed for the python bindings; keep the project's numpy<2 pin (not --upgrade)
+"$PYTHON_EXE" -m pip install "numpy<2" || { print_red "ERROR: could not install numpy<2"; exit 1; }
 
 #set -e
 
@@ -227,8 +236,13 @@ fi
 # set CUDA 
 #export CUDA_VERSION="cuda-11.8"  # must be an installed CUDA path in /usr/local; 
                                   # if available, you can use the simple path "/usr/local/cuda" which should be a symbolic link to the last installed cuda version 
+# CUDA support is opt-in (OPENCV_WITH_CUDA=1): a CUDA build only works when the CUDA toolkit, cuDNN,
+# the host compiler and the GPU architecture all match, and otherwise fails after a long compile.
 CUDA_ON=ON
-if [[ -n "$CUDA_VERSION" ]]; then
+if [[ "${OPENCV_WITH_CUDA:-0}" != 1 ]]; then
+    echo "Building OpenCV without CUDA (set OPENCV_WITH_CUDA=1 to enable it)"
+    CUDA_ON=OFF
+elif [[ -n "$CUDA_VERSION" ]]; then
     CUDA_VERSION=$(get_usable_cuda_version $CUDA_VERSION)
     echo using CUDA $CUDA_VERSION
 	if [ ! -d /usr/local/$CUDA_VERSION ]; then 
@@ -288,8 +302,15 @@ if [[ $version == *"24.04"* ]] ; then
     BUILD_SFM_OPTION="OFF"  # it seems this module brings some build issues with Ubuntu 24.04
 fi
 
+# System packages (apt) are only installed outside a conda/pixi environment, which provides the
+# build dependencies itself (below for conda; pixi.toml for pixi).
+INSTALL_APT_PACKAGES=false
+if [[ -z "$CONDA_PREFIX" && "$PIXI_ACTIVATED" != true ]]; then
+    INSTALL_APT_PACKAGES=true
+fi
 if [[ ! -d "$TARGET_FOLDER/opencv" ]]; then
     if [[ $version != *"darwin"* ]]; then
+      if [ "$INSTALL_APT_PACKAGES" = true ]; then
         sudo apt-get update
         sudo apt-get install -y pkg-config libglew-dev libtiff5-dev zlib1g-dev libjpeg-dev libeigen3-dev libtbb-dev libgtk2.0-dev libopenblas-dev libgtk-3-dev
         sudo apt-get install -y curl software-properties-common unzip
@@ -306,28 +327,20 @@ if [[ ! -d "$TARGET_FOLDER/opencv" ]]; then
         if [[ $version == *"22.04"* || $version == *"24.04"* ]] ; then
             sudo apt install -y libtbb-dev libeigen3-dev 
             sudo apt install -y zlib1g-dev libjpeg-dev libwebp-dev libpng-dev libtiff5-dev
-            sudo add-apt-repository -y "deb http://security.ubuntu.com/ubuntu xenial-security main"  # for libjasper-dev 
-            sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32 # for libjasper-dev 
-            sudo apt update
-            sudo apt install -y libjasper-dev
             sudo apt install -y libv4l-dev libdc1394-dev libtheora-dev libvorbis-dev libxvidcore-dev libx264-dev yasm \
                                     libopencore-amrnb-dev libopencore-amrwb-dev libxine2-dev libva-dev           
         fi
         if [[ $version == *"20.04"* ]] ; then
             sudo apt install -y libtbb-dev libeigen3-dev 
             sudo apt install -y zlib1g-dev libjpeg-dev libwebp-dev libpng-dev libtiff5-dev 
-            sudo add-apt-repository "deb http://security.ubuntu.com/ubuntu xenial-security main"  # for libjasper-dev 
-            sudo apt install -y libjasper-dev
             sudo apt install -y libv4l-dev libdc1394-22-dev libtheora-dev libvorbis-dev libxvidcore-dev libx264-dev yasm \
                                     libopencore-amrnb-dev libopencore-amrwb-dev libxine2-dev            
         fi        
         if [[ $version == *"18.04"* ]] ; then
             sudo apt-get install -y libpng-dev 
-            sudo add-apt-repository "deb http://security.ubuntu.com/ubuntu xenial-security main"  # for libjasper-dev 
-            sudo apt-get install -y libjasper-dev
         fi
         if [[ $version == *"16.04"* ]] ; then
-            sudo apt-get install -y libpng12-dev libjasper-dev 
+            sudo apt-get install -y libpng12-dev 
         fi        
 
         DO_INSTALL_FFMPEG=$(check_package ffmpeg)
@@ -335,8 +348,9 @@ if [[ ! -d "$TARGET_FOLDER/opencv" ]]; then
             echo "installing ffmpeg and its dependencies"
             sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libpostproc-dev libswscale-dev 
         fi 
+      fi  # INSTALL_APT_PACKAGES
 
-        if [ "$CONDA_INSTALLED" = true ]; then
+        if [ "$CONDA_INSTALLED" = true ] && [ -n "$CONDA_PREFIX" ]; then
             # NOTE: these are the "system" packages that are needed within conda to build opencv from source
             conda install -y -c conda-forge \
                 pkg-config \
@@ -344,7 +358,7 @@ if [[ ! -d "$TARGET_FOLDER/opencv" ]]; then
                 cmake \
                 suitesparse \
                 lapack \
-                libtiff zlib libjpeg-turbo eigen tbb glew libpng \
+                libtiff zlib libjpeg-turbo "eigen=5.0.1" tbb glew libpng \
                 x264 "ffmpeg>=6,<8" libva \
                 freetype cairo \
                 pygobject gtk2 gtk3 glib xorg-xorgproto \
@@ -565,15 +579,15 @@ fi
 
 if [ ! -f $OPENCV_CORE_LIB ]; then
     if [ ! -d opencv ]; then
-      wget https://github.com/opencv/opencv/archive/$OPENCV_VERSION.zip
+      wget https://github.com/opencv/opencv/archive/$OPENCV_VERSION.zip || { print_red "ERROR: OpenCV download failed"; exit 1; }
       sleep 1
-      unzip $OPENCV_VERSION.zip
+      unzip -q $OPENCV_VERSION.zip || { print_red "ERROR: could not unzip $OPENCV_VERSION.zip"; exit 1; }
       rm $OPENCV_VERSION.zip
       cd opencv-$OPENCV_VERSION
 
-      wget https://github.com/opencv/opencv_contrib/archive/$OPENCV_VERSION.zip
+      wget https://github.com/opencv/opencv_contrib/archive/$OPENCV_VERSION.zip || { print_red "ERROR: opencv_contrib download failed"; exit 1; }
       sleep 1
-      unzip $OPENCV_VERSION.zip
+      unzip -q $OPENCV_VERSION.zip || { print_red "ERROR: could not unzip $OPENCV_VERSION.zip"; exit 1; }
       rm $OPENCV_VERSION.zip
 
       cd ..
@@ -637,7 +651,7 @@ if [ ! -f $OPENCV_CORE_LIB ]; then
           -DBUILD_opencv_python3=ON \
           -DBUILD_PROTOBUF=${WITH_PROTOBUF:-OFF} \
           -DAPPLE_FRAMEWORK=${WITH_APPLE_FRAMEWORK:-OFF} \
-          $CONDA_OPTIONS $MAC_OPTIONS $PIXI_OPTIONS $PYTHON_OPTIONS $DARWIN_CONDA_TBB ..
+          $CONDA_OPTIONS $MAC_OPTIONS $PIXI_OPTIONS $PYTHON_OPTIONS $DARWIN_CONDA_TBB .. || { print_red "ERROR: OpenCV cmake configure failed"; exit 1; }
     else
         # Nvidia Jetson aarch64
         echo "building NVIDIA Jetson config"
@@ -671,11 +685,10 @@ if [ ! -f $OPENCV_CORE_LIB ]; then
           -DBUILD_PERF_TESTS=OFF \
           -DINSTALL_PYTHON_EXAMPLES=OFF \
           -DINSTALL_C_EXAMPLES=OFF \
-          -DBUILD_EXAMPLES=OFF ..
+          -DBUILD_EXAMPLES=OFF .. || { print_red "ERROR: OpenCV cmake configure failed"; exit 1; }
     fi
-    make -j$(nproc)  # use nproc to get the number of available cores
-    make install -j$(nproc)
-    
+    make -j$(nproc) || { print_red "ERROR: OpenCV build failed"; exit 1; }  # use nproc to get the number of available cores
+    make install -j$(nproc) || { print_red "ERROR: OpenCV install failed"; exit 1; }
     # Restore pixi's protobuf headers if we hid them
     if [ "$PIXI_ACTIVATED" = true ]; then
         PIXI_PROTOBUF_INCLUDE=""
@@ -752,7 +765,14 @@ if [[ -d opencv/install ]]; then
     if [[ -d "$PYTHON_SOURCE_FOLDER" ]]; then
         if [[ -n "$PYTHON_SITE_PACKAGES" ]] && [[ -d "$PYTHON_SITE_PACKAGES" ]] && [[ -w "$PYTHON_SITE_PACKAGES" ]]; then
             echo "copying built python cv2 module from $PYTHON_SOURCE_FOLDER to $PYTHON_SITE_PACKAGES"
-            cp -r $PYTHON_SOURCE_FOLDER $PYTHON_SITE_PACKAGES
+            # Remove the existing cv2 package first instead of copying over it: conda hard-links package
+            # files from its cache into every environment, so writing into an existing cv2 file (as
+            # cp does) would overwrite conda's OpenCV in all environments that share it.
+            if [[ -d "$PYTHON_SITE_PACKAGES/cv2" ]]; then
+                print_yellow "Replacing $PYTHON_SITE_PACKAGES/cv2 with the built module (a separate environment is cleaner when conda's libopencv/py-opencv is installed)"
+                rm -rf "$PYTHON_SITE_PACKAGES/cv2"
+            fi
+            cp -r "$PYTHON_SOURCE_FOLDER" "$PYTHON_SITE_PACKAGES"
             if [[ $? -eq 0 ]]; then
                 print_green "Successfully deployed cv2 module to $PYTHON_SITE_PACKAGES"
             else
