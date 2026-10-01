@@ -478,20 +478,21 @@ void bind_map(pybind11::module &m) {
         .def("set_reloaded_session_info", &pyslam::Map::set_reloaded_session_info)
         .def("get_reloaded_session_info", &pyslam::Map::get_reloaded_session_info)
         // Lock properties
+        // Getters are py::cpp_function so that they can carry keep_alive: def_property_readonly's
+        // extra arguments do not accept keep_alive in pybind11 >= 3.
         .def_property_readonly(
-            "lock",
-            [](pyslam::Map &self) {
-                return std::make_shared<pyslam::PyMapMutexWrapper>(self.lock());
-            },
-            py::keep_alive<0, 1>() // keep Map (arg #1) alive as long as the returned wrapper lives
-            )
+            "lock", py::cpp_function(
+                        [](pyslam::Map &self) {
+                            return std::make_shared<pyslam::PyMapMutexWrapper>(self.lock());
+                        },
+                        py::keep_alive<0, 1>())) // keep Map alive as long as the wrapper lives
         .def_property_readonly(
             "update_lock",
-            [](pyslam::Map &self) {
-                return std::make_shared<pyslam::PyMapMutexWrapper>(self.update_lock());
-            },
-            py::keep_alive<0, 1>() // keep Map (arg #1) alive as long as the returned wrapper lives
-        );
+            py::cpp_function(
+                [](pyslam::Map &self) {
+                    return std::make_shared<pyslam::PyMapMutexWrapper>(self.update_lock());
+                },
+                py::keep_alive<0, 1>())); // keep Map alive as long as the wrapper lives
 
     // LocalMapBase class - complete interface matching Python LocalMapBase
     py::class_<pyslam::LocalMapBase, std::shared_ptr<pyslam::LocalMapBase>>(m, "LocalMapBase")
@@ -508,12 +509,11 @@ void bind_map(pybind11::module &m) {
         // Lock property
         .def_property_readonly(
             "lock",
-            [](pyslam::LocalMapBase &self) {
-                return std::make_shared<pyslam::PyMapMutexWrapper>(self.lock());
-            },
-            py::keep_alive<0, 1>() // keep LocalMapBase (arg #1) alive as long as the returned
-                                   // wrapper lives
-            )
+            py::cpp_function(
+                [](pyslam::LocalMapBase &self) {
+                    return std::make_shared<pyslam::PyMapMutexWrapper>(self.lock());
+                },
+                py::keep_alive<0, 1>())) // keep LocalMapBase alive as long as the wrapper lives
         // Core operations
         .def("reset", &pyslam::LocalMapBase::reset)
         .def("reset_session", &pyslam::LocalMapBase::reset_session,

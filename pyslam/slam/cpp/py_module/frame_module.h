@@ -464,12 +464,16 @@ void bind_frame(py::module &m) {
         // vector with zero-copy
         DEFINE_VECTOR_PROPERTY_ZERO_COPY(pyslam::Frame, kps_ur, float, "kps_ur")
 
+        // The getter is a py::cpp_function so that it can carry keep_alive: def_property's extra
+        // arguments do not accept keep_alive in pybind11 >= 3.
         .def_property(
             "points",
-            [](pyslam::Frame &self) {
-                // Return a proxy object that supports element assignment
-                return py::cast(PointsProxy(self));
-            },
+            py::cpp_function(
+                [](pyslam::Frame &self) {
+                    // Return a proxy object that supports element assignment
+                    return py::cast(PointsProxy(self));
+                },
+                py::keep_alive<0, 1>()), // keep the Frame alive as long as the proxy lives
             [](pyslam::Frame &self, py::object points_obj) {
                 // Support full assignment (replacing entire vector)
                 if (points_obj.is_none()) {
@@ -500,8 +504,7 @@ void bind_frame(py::module &m) {
                         self.set_point_match(points_vector[i], static_cast<int>(i));
                     }
                 }
-            },
-            py::keep_alive<0, 1>())
+            })
         //.def_readwrite("outliers", &pyslam::Frame::outliers)
         DEFINE_VECTOR_PROPERTY_ZERO_COPY(pyslam::Frame, outliers, bool, "outliers")
 
