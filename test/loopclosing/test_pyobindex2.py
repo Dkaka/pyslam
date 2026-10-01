@@ -13,6 +13,7 @@ from pyslam.utilities.img_management import (
     float_to_color,
     convert_float_to_colored_uint8_image,
     LoopCandidateImgs,
+    ImgWriter,
 )
 from pyslam.utilities.features import transform_float_to_binary_descriptor
 
@@ -137,10 +138,10 @@ if __name__ == "__main__":
                 img,
                 f"id: {img_id}",
                 font_pos,
-                LoopCandidateImgs.kFont,
-                LoopCandidateImgs.kFontScale,
-                LoopCandidateImgs.kFontColor,
-                LoopCandidateImgs.kFontThickness,
+                ImgWriter.kFont,
+                ImgWriter.kFontScale,
+                ImgWriter.kFontColor,
+                ImgWriter.kFontThickness,
                 cv2.LINE_AA,
             )
             cv2.imshow("img", img)
