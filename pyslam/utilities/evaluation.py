@@ -25,10 +25,6 @@ import numpy as np
 from evo.core import metrics, trajectory
 from evo.core.metrics import PoseRelation, Unit
 from evo.core.trajectory import PosePath3D, PoseTrajectory3D
-from evo.tools import plot
-from evo.tools.plot import PlotMode
-from evo.tools.settings import SETTINGS
-from matplotlib import pyplot as plt
 
 from errno import EEXIST
 import traceback
@@ -56,6 +52,12 @@ def mkdir_p(folder_path):
 def evaluate_evo(
     poses_est, poses_gt, is_monocular, plot_dir, label, save_metrics=True, save_plot=True
 ):
+    # evo's plotting (seaborn, pandas) and matplotlib are imported only when plotting is needed
+    from evo.tools import plot
+    from evo.tools.plot import PlotMode
+    from evo.tools.settings import SETTINGS  # noqa: F401
+    from matplotlib import pyplot as plt
+
 
     if len(poses_est) == 0 or len(poses_gt) == 0:
         Printer.red("No poses to evaluate!")
