@@ -73,6 +73,13 @@ class LoopDetectorIBow(LoopDetectorBase):
             f"LoopDetectorIBow: min number of images to start detecting loops: {self.lc_detector_parameters.p}"
         )
         self.lc_detector = ibow.LCDetector(self.lc_detector_parameters)
+        # Known limitation: inside SLAM, iBoW's own inlier check rejects nearly all loop
+        # candidates, so loops are usually not closed (e.g. KITTI 06), although the same
+        # detector finds them when it is fed the video frames directly (test/loopclosing/test_pyibow.py).
+        Printer.yellow(
+            "WARNING: LoopDetectorIBow: iBoW currently misses most loop closures when used inside SLAM "
+            "(known issue). Use DBOW3 or DBOW2 if you need reliable loop closing."
+        )
 
     def reset(self):
         LoopDetectorBase.reset(self)
