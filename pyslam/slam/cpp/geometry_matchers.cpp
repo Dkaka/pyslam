@@ -83,7 +83,8 @@ std::tuple<std::vector<int>, std::vector<int>, int> ProjectionMatcher::search_fr
     // KD for f_cur
     const auto &kd_cur = f_cur->kd();
     if (!kd_cur) {
-        MSG_ERROR("search_frame_by_projection: f_cur->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_frame_by_projection: f_cur->kd() is not initialized");
         return std::make_tuple(std::vector<int>(), std::vector<int>(), 0);
     }
 
@@ -291,7 +292,8 @@ ProjectionMatcher::search_keyframe_by_projection(
     // KD for f_cur
     const auto &kd_cur = f_cur->kd();
     if (!kd_cur) {
-        MSG_ERROR("search_frame_by_projection: f_cur->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_frame_by_projection: f_cur->kd() is not initialized");
         return std::make_tuple(std::vector<int>(), std::vector<int>(), 0);
     }
 
@@ -422,7 +424,8 @@ std::pair<int, std::vector<int>> ProjectionMatcher::search_map_by_projection(
     // KD neighbors
     const auto &kd_cur = f_cur->kd();
     if (!kd_cur) {
-        MSG_ERROR("search_map_by_projection: f_cur->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_map_by_projection: f_cur->kd() is not initialized");
         return std::pair(0, std::vector<int>());
     }
 
@@ -586,7 +589,8 @@ std::pair<int, std::vector<MapPointPtr> &> ProjectionMatcher::search_more_map_po
 
     auto kd_cur = f_cur->kd();
     if (!kd_cur) {
-        MSG_ERROR("search_more_map_points_by_projection: f_cur->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_more_map_points_by_projection: f_cur->kd() is not initialized");
         return std::pair<int, std::vector<MapPointPtr> &>(0, f_cur_matched_points);
     }
 
@@ -710,7 +714,8 @@ int ProjectionMatcher::search_and_fuse(const std::vector<MapPointPtr> &points,
     // KD tree for keyframe
     const auto &kd = keyframe->kd();
     if (!kd) {
-        MSG_ERROR("search_and_fuse: keyframe->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_and_fuse: keyframe->kd() is not initialized");
         return fused_pts_count;
     }
 
@@ -837,7 +842,8 @@ std::vector<MapPointPtr> &ProjectionMatcher::search_and_fuse_for_loop_correction
     // KD tree for keyframe
     const auto &kd = keyframe->kd();
     if (!kd) {
-        MSG_ERROR("search_and_fuse_for_loop_correction: keyframe->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_and_fuse_for_loop_correction: keyframe->kd() is not initialized");
         return replace_points;
     }
 
@@ -968,14 +974,16 @@ ProjectionMatcher::search_by_sim3(const KeyFramePtr &kf1, const KeyFramePtr &kf2
     // KD tree for kf1
     const auto &kd1 = kf1->kd();
     if (!kd1) {
-        MSG_ERROR("search_by_sim3: kf1->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_by_sim3: kf1->kd() is not initialized");
         return std::make_tuple(0, std::vector<int>(), std::vector<int>());
     }
 
     // KD tree for kf2
     const auto &kd2 = kf2->kd();
     if (!kd2) {
-        MSG_ERROR("search_by_sim3: kf2->kd() is not initialized");
+        // Recoverable (e.g. a frame without features): warn and return no matches
+        MSG_RED_WARN("search_by_sim3: kf2->kd() is not initialized");
         return std::make_tuple(0, std::vector<int>(), std::vector<int>());
     }
 

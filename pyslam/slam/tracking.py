@@ -1151,6 +1151,15 @@ class Tracking:
         self.idxs_ref = []
         self.idxs_cur = []
 
+        # A frame without features cannot be matched: the C++ matchers would hit an uninitialised kd-tree
+        f_cur_has_no_features = f_cur.kps is None or len(f_cur.kps) == 0
+        if f_cur_has_no_features and self.state in (
+            SlamState.NO_IMAGES_YET,
+            SlamState.NOT_INITIALIZED,
+        ):
+            Printer.red(f"Frame {f_cur.id} has no features: skipped for initialization")
+            return
+
         if self.state == SlamState.NO_IMAGES_YET:
             # push first frame in the inizializer
             self.initializer.init(f_cur, img, img_right, depth)
@@ -1281,7 +1290,14 @@ class Tracking:
             # # if self.map.num_keyframes() > 50: # for ibow
             #     self.state = SlamState.LOST # force to lost state for testing relocalization
 
-            if self.state == SlamState.OK:
+            if f_cur_has_no_features:
+                # Nothing to match or relocalize with (e.g. covered lens, black or saturated frame):
+                # a tracking failure, handled by the state update below.
+                Printer.red(
+                    f"Frame {f_cur.id} has no features (blank, very dark or saturated image?): skipping tracking"
+                )
+                self.pose_is_ok = False
+            elif self.state == SlamState.OK:
                 # SLAM is OK
                 # check for map point replacements in previous frame f_ref (some points might have been replaced by local mapping during point fusion)
                 self.f_ref.check_replaced_map_points()
