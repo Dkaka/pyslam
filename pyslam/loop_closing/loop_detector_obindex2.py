@@ -43,7 +43,9 @@ from .loop_detector_base import (
 import pyslam.config as config
 
 config.cfg.set_lib("pyobindex2")
-import pyobindex2 as obindex2
+from pyslam.utilities.system import import_native_module
+
+obindex2 = import_native_module("pyobindex2", "run thirdparty/pyibow/build.sh")
 
 
 kVerbose = True

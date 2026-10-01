@@ -43,7 +43,9 @@ from .loop_detector_base import (
 import pyslam.config as config
 
 config.cfg.set_lib("pyibow")
-import pyibow as ibow
+from pyslam.utilities.system import import_native_module
+
+ibow = import_native_module("pyibow", "run thirdparty/pyibow/build.sh")
 
 
 kVerbose = True

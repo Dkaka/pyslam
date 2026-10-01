@@ -46,7 +46,9 @@ from .loop_detector_vocabulary import VocabularyData
 import pyslam.config as config
 
 config.cfg.set_lib("pydbow2")
-import pydbow2 as dbow2
+from pyslam.utilities.system import import_native_module
+
+dbow2 = import_native_module("pydbow2", "run thirdparty/pydbow2/build.sh")
 
 
 kVerbose = True
