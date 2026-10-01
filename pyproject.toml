@@ -6,83 +6,102 @@ maintainers = [{ name = "Luigi Freda", email = "luigifreda@gmail.com" }]
 description = "pySLAM is a Python-based Visual SLAM pipeline that supports monocular, stereo, and RGB-D cameras. It offers a wide range of modern local and global features, multiple loop-closing strategies, a volumetric reconstruction pipeline, integration of depth prediction models, and semantic segmentation for enhanced scene understanding."
 readme = "README.md"
 requires-python = ">=3.11.9"
+# Core: what the `default` level needs (main_vo, main_feature_matching, main_slam, main_map_viewer,
+# main_slam_evaluation, dense reconstruction with TSDF). Lower bounds only, so that conda-forge / pixi
+# packages satisfy them instead of pip replacing them with older pinned wheels. torch, torchvision,
+# OpenCV and faiss come from conda-forge (or the install scripts), not from here.
+# The optional extras follow the levels: depth, semantics, full (cumulative); tf (TensorFlow
+# features, in their own env); dev.
 dependencies = [
-  "absl-py==1.4.0",
-  "astor==0.8.1",
-  "cycler>=0.10.0",
-  "decorator==4.4.2",
-  "gast==0.3.3",
-  "google-pasta==0.2.0",
-  "grpcio>=1.56.2",
-  "h5py>=3.1.1",
-  "imageio==2.34.2",
-  "importlib_metadata==8.0.0",
-  "kornia==0.8.2",
-  "kornia_moons==0.2.9",
-  "Keras-Applications==1.0.8",
-  "Keras-Preprocessing==1.1.2",
-  "kiwisolver>=1.0.1",
-  "Markdown==3.1.1",
-  "matplotlib==3.7.5",
-  "networkx==3.1",
-  "numpy>=1.24.3",
-  "ordered-set==4.1.0",
-  "pillow>=10.4.0",
-  "protobuf>=3.20.3",
-  "psutil>=5.5.1",
-  "pygame==2.6.0",
-  "pyopengl==3.1.7",
-  "pyOpenSSL>=19.0.0",
-  "pyparsing>=2.4.6",
-  "python-dateutil==2.8.2",
-  "pyyaml>=6.0.1",
+  "numpy>=1.24.3,<2",
   "scipy>=1.10.1",
-  "scikit-image==0.21.0",
-  "seaborn==0.13.2",
-  "six==1.14.0",
-  "sklearn-pandas==1.8.0",
-  "termcolor==2.4.0",
-  "tf-slim==1.1.0",
-  "tqdm==4.66.4",
-  "Werkzeug>=2.2.2",
-  "wrapt==1.17.2",
-  "yacs==0.1.8",
-  "onnxruntime>=1.22.0",
-  "gdown",
+  "matplotlib>=3.7.5",
+  "seaborn>=0.13.2",
+  "pandas",
+  "scikit-image>=0.21.0",
+  "networkx>=3.1",
+  "imageio>=2.34.2",
+  "pillow>=10.4.0",
+  "h5py>=3.1.1",
+  "pyyaml>=6.0.1",
   "hjson",
   "ujson",
+  "munch",
+  "yacs>=0.1.8",
+  "configargparse",
+  "ordered-set>=4.1.0",
+  "termcolor>=2.4.0",
+  "tqdm>=4.66.4",
+  "psutil>=5.5.1",
+  "packaging",
+  "requests",
+  "gdown",
   "jinja2",
-  "timm",
-  "rerun-sdk>=0.17.0",
-  "einops",
-  "fast-pytorch-kmeans",
-  "pyflann-py3",
+  "six>=1.14.0",
+  "typing_extensions",
+  "numba",
   "evo",
   "trimesh",
-  "munch",
-  "tensorboard",  # imported by thirdparty/disk (DISK, LIGHTGLUE_DISK) at load time
-  "wandb",
   "plyfile",
-  "glfw",
-  "PyGLM",
-  "lpips",
-  "rich",
-  "ruff",
-  "gradio",
-  "roma",
+  "open3d",  # dense reconstruction (TSDF / voxel grid), part of the default level
+  "pyflann-py3",
   "quaternion",
-  "open3d",
+  "roma",
+  "kornia>=0.8.2,<0.9",
+  "kornia_moons>=0.2.9",
+  "timm",
+  "einops",
+  "opt_einsum",
+  "fast-pytorch-kmeans",
+  "onnxruntime>=1.22.0",
+  "tensorboard",  # imported by thirdparty/disk (DISK, LIGHTGLUE_DISK) at load time
+  # viewers
   "pyqtgraph",
   "pyside6",
-  "pillow_heif",
-  "opt_einsum",
-  "configargparse",
-  "numba",
-  "pytest",
+  "pyopengl>=3.1.7",
+  "pygame>=2.6.0",
+  "glfw",
+  "PyGLM",
+  "rerun-sdk>=0.17.0,<0.37",  # rerun-sdk 0.37 needs numpy 2
+  # datasets (ROS bags via mcap)
   "mcap",
-  "mcap-ros2-support",
   "mcap-ros1-support",
-  #"faiss-cpu",
+  "mcap-ros2-support",
+]
+
+[project.optional-dependencies]
+# main_depth_prediction
+depth = [
+  "pillow_heif",
+  "gradio",
+]
+# main_semantic_image_segmentation (on top of depth). Some backends need more packages, installed by
+# their install scripts (e.g. detectron2, open-clip-torch==2.24.0 for EOV-Seg).
+semantics = [
+  "pyslam[depth]",
+  "transformers",
+  "ultralytics",
+  "supervision",
+  "scikit-learn",
+]
+# main_scene_from_views, Gaussian splatting (on top of semantics)
+full = [
+  "pyslam[semantics]",
+  "lpips",
+  "wandb",
+  "rich",  # MonoGS
+]
+# TensorFlow-based features (DELF, ContextDesc, LF-Net, GeoDesc, L2-Net Keras): TensorFlow itself is
+# installed separately, in its own environment
+tf = [
+  "tf-slim==1.1.0",
+  "Keras-Applications==1.0.8",
+  "Keras-Preprocessing==1.1.2",
+]
+dev = [
+  "pytest",
+  "ruff",
+  "rich",
 ]
 
 [tool.setuptools]
