@@ -100,7 +100,7 @@ ensure_pip "$PYTHON_EXE" || exit 1
 # and pip would install its files over conda's), if conda-forge does not have them (roma,
 # mcap-ros1/2-support), or for open3d (conda-forge's 0.20 fails at import with filament >= 1.77.2).
 CONDA_PY_PKGS=(
-    scipy matplotlib-base seaborn pandas scikit-image networkx imageio pillow h5py
+    scipy matplotlib-base seaborn pandas scikit-image scikit-learn networkx imageio pillow h5py
     pyyaml hjson-py ujson munch yacs configargparse ordered-set termcolor tqdm psutil packaging
     requests gdown jinja2 six typing_extensions numba evo trimesh plyfile einops opt_einsum
     tensorboard pyqtgraph pyopengl pygame pyglm "rerun-sdk>=0.23,<0.23.2" mcap

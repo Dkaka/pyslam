@@ -19,6 +19,7 @@ dependencies = [
   "seaborn>=0.13.2",
   "pandas",
   "scikit-image>=0.21.0",
+  "scikit-learn",  # Patch-NetVLAD (NETVLAD loop detector); came in via sklearn-pandas before
   "networkx>=3.1",
   "imageio>=2.34.2",
   "pillow>=10.4.0",
@@ -80,7 +81,6 @@ semantics = [
   "transformers",
   "ultralytics",
   "supervision",
-  "scikit-learn",
 ]
 # main_scene_from_views, Gaussian splatting (on top of semantics)
 full = [
