@@ -506,10 +506,12 @@ stop_sudo_alive() {
 
 # ===================== BUILD JOBS ========================
 
-# Number of parallel jobs for heavy C++ builds (GTSAM, g2o): the number of cores, capped so that
-# each compiler process has about PYSLAM_MEM_PER_JOB_GB GB (default 2) of available memory.
+# Number of parallel jobs for heavy C++ builds (GTSAM, g2o, the pySLAM C++ core): the number of
+# cores, capped so that each compiler process has about PYSLAM_MEM_PER_JOB_GB GB (default 4) of
+# available memory.
 # Without the cap, machines with many cores but little memory (e.g. WSL2, which gets half of the
-# host memory by default) run out of memory and the compiler is killed.
+# host memory by default) run out of memory and the compiler is killed. Most GTSAM files need
+# under 4 GB; a few files of the GTSAM Python wrapper need up to about 10 GB on their own.
 # Set PYSLAM_BUILD_JOBS to choose the number of jobs yourself.
 function get_build_jobs(){
     if [[ -n "$PYSLAM_BUILD_JOBS" ]]; then
@@ -524,7 +526,7 @@ function get_build_jobs(){
         cores=$(command nproc)
         mem_mb=$(( $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) / 1024 ))
     fi
-    jobs=$(( mem_mb / (${PYSLAM_MEM_PER_JOB_GB:-2} * 1024) ))
+    jobs=$(( mem_mb / (${PYSLAM_MEM_PER_JOB_GB:-4} * 1024) ))
     (( jobs > cores )) && jobs=$cores
     (( jobs < 1 )) && jobs=1
     echo "$jobs"

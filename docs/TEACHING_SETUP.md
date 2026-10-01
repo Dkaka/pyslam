@@ -117,6 +117,12 @@ for the weeks that use them. Some of them need an NVIDIA GPU on Linux.
   on KITTI 06 the trajectory error (ATE) of monocular SLAM ranged from about 12 m to 30 m in our
   tests, mostly from scale drift before the loop closes. Compare methods over several runs. See
   [non-determinism](./TROUBLESHOOTING.md#non-determinism-and-run-to-run-variability).
+- **Memory for the build.** Compiling GTSAM needs about 10 GB of free memory: most files need under
+  4 GB, but a few files of its Python wrapper need up to 10 GB each. The build scripts run as many
+  compiler jobs as the free memory allows (about 4 GB each); set `PYSLAM_BUILD_JOBS=1` to build one
+  file at a time. On **Windows**, WSL2 gets only half of the computer's memory by default: if the
+  build stops with `Killed signal terminated program cc1plus`, close other programs, or give WSL
+  more memory (`memory=` and `swap=` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`).
 - **Don't run `./clean.sh` casually.** It deletes the build folders, including the GTSAM build
   (`thirdparty/gtsam_local`), which then takes about 10 minutes to rebuild.
 - **Error messages tell you what to do.** If a component is not installed or not built, pySLAM says
