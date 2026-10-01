@@ -116,10 +116,10 @@ class LoopCloserBase:
                 img_cur,
                 f"id: {img_id}",
                 font_pos,
-                LoopCandidateImgs.kFont,
-                LoopCandidateImgs.kFontScale,
-                LoopCandidateImgs.kFontColor,
-                LoopCandidateImgs.kFontThickness,
+                ImgWriter.kFont,
+                ImgWriter.kFontScale,
+                ImgWriter.kFontColor,
+                ImgWriter.kFontThickness,
                 cv2.LINE_AA,
             )
             cv2.imshow("loop img", img_cur)
