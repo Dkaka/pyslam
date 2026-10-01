@@ -117,6 +117,11 @@ class SharedSingletonLock:
 
 # Qplot2d class for dynamic 2D plotting using pyqtgraph
 # NOTE: This is a good tutorial https://www.pythonguis.com/tutorials/plotting-pyqtgraph/
+# pyqtgraph's single-letter colours that have poor contrast on the white plot background ('c', 'g'
+# and 'y' are (0,255,255), (0,255,0) and (255,255,0)): drawn with darker shades instead.
+_COLORS_ON_WHITE = {"c": (0, 150, 190), "g": (0, 160, 0), "y": (200, 150, 0)}
+
+
 class Qplot2d:
     def __init__(self, xlabel: str = "", ylabel: str = "", title: str = ""):
         self.xlabel = xlabel
@@ -214,10 +219,27 @@ class Qplot2d:
         self.screen_width, self.screen_height = self.get_screen_dimensions()
 
         self.win = pg.PlotWidget(title=self.title)  # Create a plot widget
-        self.legend = pg.LegendItem()
+        # Line width in logical pixels, scaled by the screen's device-pixel ratio: pyqtgraph's default
+        # 1-px pens look hair-thin on high-DPI (e.g. macOS Retina, 2x) screens. 1 on standard screens.
+        self.line_width = 1.0
+        try:
+            screen = self.win.screen() or QtWidgets.QApplication.primaryScreen()
+            if screen is not None:
+                self.line_width = max(1.0, float(screen.devicePixelRatio()))
+        except Exception:
+            pass
+        # Legend in a light, semi-transparent box with dark text, anchored in the top-left corner of the
+        # plot area and drawn above the curves (which show through it, muted). Curves get their legend
+        # entry from their name (see drawer_refresh). The legend can be dragged.
+        self.legend = self.win.addLegend(
+            offset=(10, 10),
+            brush=pg.mkBrush(240, 240, 240, 200),
+            pen=pg.mkPen(160, 160, 160),
+            labelTextColor=(20, 20, 20),
+        )
+        self.legend.setZValue(1000)
         self.win.setLabel("left", self.ylabel)  # Set the y-axis label
         self.win.setLabel("bottom", self.xlabel)  # Set the x-axis label
-        self.win.addItem(self.legend)
 
         self.win.showGrid(x=True, y=True, alpha=0.5)  # Show grid
 
@@ -288,6 +310,8 @@ class Qplot2d:
             self.got_data = True
             self.data = queue.get()
             xy_signal, name, color, marker, linestyle, append = self.data
+            if isinstance(color, str):
+                color = _COLORS_ON_WHITE.get(color, color)
 
             # Initialize figure upon receiving the first data
             if not self.initialized:
@@ -310,17 +334,16 @@ class Qplot2d:
             else:
                 if append:
                     handle_data = ([xy_signal[0]], [xy_signal[1]])  # append the first sample
-                    kwargs = {"x": [xy_signal[0]], "y": [xy_signal[1]], "pen": color, "name": name}
+                    kwargs = {"x": [xy_signal[0]], "y": [xy_signal[1]], "pen": pg.mkPen(color, width=self.line_width), "name": name}
                 else:
                     handle_data = (xy_signal[0], xy_signal[1])
-                    kwargs = {"x": xy_signal[0], "y": xy_signal[1], "pen": color, "name": name}
+                    kwargs = {"x": xy_signal[0], "y": xy_signal[1], "pen": pg.mkPen(color, width=self.line_width), "name": name}
                     self.updateMinMax(xy_signal[0], xy_signal[1])
                 if linestyle != "":
                     kwargs["style"] = linestyle
                 if marker != "":
                     kwargs["symbol"] = marker
-                handle = self.win.plot(**kwargs)
-                self.legend.addItem(handle, name)
+                handle = self.win.plot(**kwargs)  # also adds the legend entry (from kwargs["name"])
                 self.handle_map[name] = handle
                 self.handle_data_map[name] = handle_data
 
@@ -409,7 +432,6 @@ class Qplot2d:
             if self.ylim != [float("inf"), float("-inf")]:
                 self.win.setYRange(self.ylim[0], self.ylim[1])
 
-            self.legend.setPos(self.xlim[0], self.ylim[1])  # Adjust legend position
             self.setGridAxis()
 
     def updateMinMax(self, x, y):

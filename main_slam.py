@@ -112,6 +112,11 @@ if __name__ == "__main__":
         help="Do not append date to output directory",
     )
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print the full camera and configuration dumps (JSON)",
+    )
     args = parser.parse_args()
 
     if args.config_path:
@@ -161,7 +166,15 @@ if __name__ == "__main__":
     )
 
     camera = PinholeCamera(config)
-    Printer.green(f"Camera: {json.dumps(camera.to_json(), indent=4, cls=SerializableEnumEncoder)}")
+    if args.verbose:
+        Printer.green(f"Camera: {json.dumps(camera.to_json(), indent=4, cls=SerializableEnumEncoder)}")
+    else:
+        cam = camera.to_json()
+        Printer.green(
+            f"Camera: {cam.get('width')}x{cam.get('height')}, fx={cam.get('fx')} fy={cam.get('fy')} "
+            f"cx={cam.get('cx')} cy={cam.get('cy')}, fps={cam.get('fps')}, "
+            f"sensor={getattr(dataset.sensor_type, 'name', dataset.sensor_type)} (--verbose for details)"
+        )
 
     # Select your tracker configuration (see the file feature_tracker_configs.py)
     # FeatureTrackerConfigs: SHI_TOMASI_ORB, FAST_ORB, ORB, ORB2, ORB2_FREAK, ORB2_BEBLID, BRISK, AKAZE, FAST_FREAK, SIFT, ROOT_SIFT, SURF, KEYNET, SUPERPOINT, CONTEXTDESC, LIGHTGLUE, XFEAT, XFEAT_XFEAT
@@ -212,18 +225,42 @@ if __name__ == "__main__":
             config.semantic_mapping_config_name
         )  # Override the semantic mapping configuration from the `settings` file
 
-    Printer.green(
-        "feature_tracker_config: ",
-        json.dumps(feature_tracker_config, indent=4, cls=SerializableEnumEncoder),
-    )
-    Printer.green(
-        "loop_detection_config: ",
-        json.dumps(loop_detection_config, indent=4, cls=SerializableEnumEncoder),
-    )
-    if Parameters.kDoSparseSemanticMappingAndSegmentation:
+    if args.verbose:
         Printer.green(
-            "semantic_mapping_config: ",
-            json.dumps(semantic_mapping_config, indent=4, cls=SerializableEnumEncoder),
+            "feature_tracker_config: ",
+            json.dumps(feature_tracker_config, indent=4, cls=SerializableEnumEncoder),
+        )
+        Printer.green(
+            "loop_detection_config: ",
+            json.dumps(loop_detection_config, indent=4, cls=SerializableEnumEncoder),
+        )
+        if Parameters.kDoSparseSemanticMappingAndSegmentation:
+            Printer.green(
+                "semantic_mapping_config: ",
+                json.dumps(semantic_mapping_config, indent=4, cls=SerializableEnumEncoder),
+            )
+    else:
+
+        def _config_name(cfg, key):
+            value = cfg.get(key) if isinstance(cfg, dict) else None
+            return getattr(value, "name", value)
+
+        loop_detector_name = (
+            _config_name(loop_detection_config, "global_descriptor_type")
+            if loop_detection_config is not None
+            else "disabled"
+        )
+        Printer.green(
+            f"Features: detector={_config_name(feature_tracker_config, 'detector_type')} "
+            f"descriptor={_config_name(feature_tracker_config, 'descriptor_type')} "
+            f"num_features={feature_tracker_config.get('num_features')}, "
+            f"loop detector: {loop_detector_name}"
+            + (
+                f", semantic mapping: {_config_name(semantic_mapping_config, 'semantic_mapping_type') or 'on'}"
+                if Parameters.kDoSparseSemanticMappingAndSegmentation
+                else ""
+            )
+            + " (--verbose for details)"
         )
     config.feature_tracker_config = feature_tracker_config
     config.loop_detection_config = loop_detection_config
@@ -497,6 +534,17 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # exit from the main loop
+    if not args.headless:
+        Printer.green("pySLAM: shutting down (closing the windows, then saving the trajectory) ...")
+
+    # Close the viewers first, all at once, so that the windows go as soon as the user has asked to
+    # quit (they were closed one after the other at the very end, a few seconds later).
+    viewers = [v for v in (cv_image_viewer, plot_drawer, viewer3D) if v]
+    viewer_threads = [threading.Thread(target=v.quit, daemon=True) for v in viewers]
+    for t in viewer_threads:
+        t.start()
+    for t in viewer_threads:
+        t.join()
 
     # here we save the online estimated trajectory
     if online_trajectory_writer:
@@ -540,20 +588,8 @@ if __name__ == "__main__":
         print("Exception while computing metrics: ", e)
         print(f"traceback: {traceback.format_exc()}")
 
-    # close stuff - ensure proper shutdown order
-    # First stop SLAM (which stops all processes and shuts down their managers)
+    # Stop SLAM (which stops all processes and shuts down their managers); the viewers are closed above
     slam.quit()
-
-    # Give processes time to clean up before closing viewers
-    time.sleep(0.5)
-
-    # Then close viewers (which may have their own processes/threads and managers)
-    if cv_image_viewer:
-        cv_image_viewer.quit()
-    if plot_drawer:
-        plot_drawer.quit()
-    if viewer3D:
-        viewer3D.quit()
 
     # Explicitly stop all LoggerQueue instances to prevent shutdown errors
     LoggerQueue.stop_all_instances()
@@ -565,6 +601,8 @@ if __name__ == "__main__":
         force_kill_all_and_exit(verbose=False)  # just in case when running an evaluation
     else:
         if platform.system() == "Darwin" or mp.get_start_method() == "spawn":
-            # HACK
-            time.sleep(5.0)
+            # HACK: wait (up to 5 s) for the child processes to exit, then kill any that are left
+            deadline = time.time() + 5.0
+            while multiprocessing.active_children() and time.time() < deadline:
+                time.sleep(0.1)
             force_kill_all_and_exit(verbose=True)  # debug
