@@ -60,7 +60,11 @@ std::tuple<std::vector<int>, std::vector<int>, int> ProjectionMatcher::search_fr
     if (check_already_matched_ref_idxs) {
         already_matched_ref_idxs_flags.resize(f_ref->points.size(), false);
         for (const int &idx : already_matched_ref_idxs) {
-            already_matched_ref_idxs_flags[idx] = true;
+            // The indices come from Python and can be stale (the reference points may have
+            // changed since they were computed): never write outside the flags.
+            if (idx >= 0 && idx < static_cast<int>(already_matched_ref_idxs_flags.size())) {
+                already_matched_ref_idxs_flags[idx] = true;
+            }
         }
     }
 
@@ -274,7 +278,11 @@ ProjectionMatcher::search_keyframe_by_projection(
     if (check_already_matched_ref_idxs) {
         already_matched_ref_idxs_flags.resize(ref_mps.size(), false);
         for (const int &idx : already_matched_ref_idxs) {
-            already_matched_ref_idxs_flags[idx] = true;
+            // The indices come from Python and can be stale (the reference points may have
+            // changed since they were computed): never write outside the flags.
+            if (idx >= 0 && idx < static_cast<int>(already_matched_ref_idxs_flags.size())) {
+                already_matched_ref_idxs_flags[idx] = true;
+            }
         }
     }
 
