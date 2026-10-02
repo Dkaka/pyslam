@@ -46,13 +46,13 @@ print_blue '================================================'
 print_blue "Installing pySLAM"
 print_blue '================================================'
 
-# check that conda is activated 
-if [ "$CONDA_INSTALLED" = true ]; then
-    print_blue "Installing pySLAM by using conda"
-    . "$SCRIPTS_DIR"/install_all_conda.sh
-elif [ "$PIXI_ACTIVATED" = true ]; then
+# An active pixi environment takes precedence: conda can be installed on the same machine
+if [ "$PIXI_ACTIVATED" = true ]; then
     print_blue "Installing pySLAM by using pixi"
     . "$SCRIPTS_DIR"/install_all_pixi.sh
+elif [ "$CONDA_INSTALLED" = true ]; then
+    print_blue "Installing pySLAM by using conda"
+    . "$SCRIPTS_DIR"/install_all_conda.sh
 else
     print_blue "Installing pySLAM by using venv"
     . "$SCRIPTS_DIR"/install_all_venv.sh

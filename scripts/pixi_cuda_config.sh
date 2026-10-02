@@ -28,10 +28,13 @@ SCRIPT_DIR_=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 SCRIPT_DIR_=$(readlink -f "$SCRIPT_DIR_")  # this reads the actual path if a symbolic directory is used
 ROOT_DIR="$SCRIPT_DIR_/.."
 
+# The active pixi environment (pixi sets CONDA_PREFIX to it), whatever its name
+PIXI_ENV_DIR="${CONDA_PREFIX:-$ROOT_DIR/.pixi/envs/default}"
+
 # Check if we're in a pixi environment
 if [ -z "$PIXI_ACTIVATED" ]; then
     # Try to detect pixi environment
-    if [ -d "$ROOT_DIR/.pixi/envs/default" ] || [ -d ".pixi/envs/default" ]; then
+    if [ -d "$PIXI_ENV_DIR" ] || [ -d "$PIXI_ENV_DIR" ]; then
         export PIXI_ACTIVATED=true
     else
         # Not in pixi environment, exit silently
@@ -48,21 +51,21 @@ if [ "$PIXI_ACTIVATED" = true ]; then
     PIXI_NVCC_BIN_DIR=""
     
     # Find nvvm/bin directory (contains cicc)
-    if [ -d "$ROOT_DIR/.pixi/envs/default/nvvm/bin" ]; then
-        PIXI_NVVM_BIN="$ROOT_DIR/.pixi/envs/default/nvvm/bin"
-        PIXI_CUDA_ROOT="$ROOT_DIR/.pixi/envs/default"
-    elif [ -d ".pixi/envs/default/nvvm/bin" ]; then
-        PIXI_NVVM_BIN=".pixi/envs/default/nvvm/bin"
-        PIXI_CUDA_ROOT=".pixi/envs/default"
+    if [ -d "$PIXI_ENV_DIR/nvvm/bin" ]; then
+        PIXI_NVVM_BIN="$PIXI_ENV_DIR/nvvm/bin"
+        PIXI_CUDA_ROOT="$PIXI_ENV_DIR"
+    elif [ -d "$PIXI_ENV_DIR/nvvm/bin" ]; then
+        PIXI_NVVM_BIN="$PIXI_ENV_DIR/nvvm/bin"
+        PIXI_CUDA_ROOT="$PIXI_ENV_DIR"
     fi
     
     # Find nvcc compiler
-    if [ -f "$ROOT_DIR/.pixi/envs/default/targets/x86_64-linux/bin/nvcc" ]; then
-        PIXI_NVCC="$ROOT_DIR/.pixi/envs/default/targets/x86_64-linux/bin/nvcc"
-        PIXI_NVCC_BIN_DIR="$ROOT_DIR/.pixi/envs/default/targets/x86_64-linux/bin"
-    elif [ -f ".pixi/envs/default/targets/x86_64-linux/bin/nvcc" ]; then
-        PIXI_NVCC=".pixi/envs/default/targets/x86_64-linux/bin/nvcc"
-        PIXI_NVCC_BIN_DIR=".pixi/envs/default/targets/x86_64-linux/bin"
+    if [ -f "$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc" ]; then
+        PIXI_NVCC="$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc"
+        PIXI_NVCC_BIN_DIR="$PIXI_ENV_DIR/targets/x86_64-linux/bin"
+    elif [ -f "$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc" ]; then
+        PIXI_NVCC="$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc"
+        PIXI_NVCC_BIN_DIR="$PIXI_ENV_DIR/targets/x86_64-linux/bin"
     elif command -v nvcc &> /dev/null; then
         PIXI_NVCC=$(which nvcc)
         PIXI_NVCC_BIN_DIR=$(dirname "$PIXI_NVCC")
