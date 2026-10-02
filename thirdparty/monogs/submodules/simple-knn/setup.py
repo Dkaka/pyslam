@@ -169,8 +169,31 @@ except Exception as e:
     print(f"Failed to get nvcc version: {e}")
     nvcc_flags = ["-O2", "-allow-unsupported-compiler"]  # Default flags if nvcc check fails
 
-supported_architectures = get_supported_architectures()
-# supported_architectures = get_current_architecture()
+def get_build_architectures():
+    """The GPU architectures to build for: those of the GPUs in this machine.
+
+    Building for every architecture nvcc knows (19 with CUDA 12.9) fails: thrust/cub build a
+    namespace name from the list, with a macro that takes a limited number of entries.
+    Set PYSLAM_CUDA_ARCHS (e.g. "61,86") to build for other GPUs than the local ones.
+    """
+    supported = get_supported_architectures()
+    wanted = [a.strip() for a in os.environ.get("PYSLAM_CUDA_ARCHS", "").split(",") if a.strip()]
+    if not wanted:
+        try:
+            import torch
+
+            caps = {torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())}
+            wanted = sorted(f"{major}{minor}" for major, minor in caps)
+        except Exception as e:
+            print(f"Could not get the GPU architectures from torch: {e}")
+    if not wanted:
+        wanted = get_current_architecture()
+    archs = [a for a in wanted if a in supported] or wanted
+    print(f"Building for GPU architectures: {archs}")
+    return archs
+
+
+supported_architectures = get_build_architectures()
 for arch in supported_architectures:
     nvcc_flags.append(f"-gencode=arch=compute_{arch},code=sm_{arch}")
 

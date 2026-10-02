@@ -59,8 +59,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Set basic compiler flags
-set(CMAKE_C_FLAGS "-O2")
-set(CMAKE_CXX_FLAGS "-O2")
+# Keep the flags from the environment (CFLAGS/CXXFLAGS): in a conda environment they carry the
+# -isystem include directories, which CMake treats as implicit and drops from its own -I list
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 
 # Function to detect CUDA architectures
 function(detect_cuda_architectures ARCHS)
@@ -158,8 +160,29 @@ endfunction()
 # set(CMAKE_CUDA_ARCHITECTURES ${CURRENT_CUDA_ARCH})
 # message(STATUS "Set CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
 
-# Detect CUDA architectures and set them
-detect_cuda_architectures(CUDA_ARCHITECTURES)
+# CUDA architectures to build for:
+# - LIETORCH_CUDA_ARCHS (cmake variable or environment variable), e.g. "61;86", if given;
+# - otherwise the architectures of the GPUs in this machine (from torch);
+# - otherwise all the architectures nvcc supports, minus the ones listed above.
+# Building for the local GPUs keeps the list short (thrust/cub fail with long lists in CUDA >= 12.8)
+# and includes architectures newer than the ones this file knows.
+if(NOT LIETORCH_CUDA_ARCHS AND DEFINED ENV{LIETORCH_CUDA_ARCHS})
+  set(LIETORCH_CUDA_ARCHS "$ENV{LIETORCH_CUDA_ARCHS}")
+endif()
+if(NOT LIETORCH_CUDA_ARCHS)
+  execute_process(
+    COMMAND python3 -c "import torch; print(';'.join(sorted({'%d%d' % torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())})))"
+    OUTPUT_VARIABLE LIETORCH_CUDA_ARCHS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+endif()
+if(LIETORCH_CUDA_ARCHS)
+  string(REPLACE "," ";" CUDA_ARCHITECTURES "${LIETORCH_CUDA_ARCHS}")
+  message(STATUS "Building for the CUDA architectures: ${CUDA_ARCHITECTURES}")
+else()
+  detect_cuda_architectures(CUDA_ARCHITECTURES)
+endif()
 # Set CUDA architectures
 set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCHITECTURES})
 message(STATUS "Detected CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
@@ -194,12 +217,16 @@ message(STATUS "Using Python3 root dir: ${Python3_ROOT_DIR}")
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
 # Determine the Python site-packages directory
-execute_process(
-    COMMAND ${Python3_EXECUTABLE} -c "import site; print(site.getsitepackages()[0])"
-    OUTPUT_VARIABLE SITE_PACKAGES_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-message(STATUS "Python site-packages directory: ${SITE_PACKAGES_DIR}")
+# Where `install` puts the modules: the environment's site-packages by default, or any folder
+# given with -DSITE_PACKAGES_DIR=<dir> (e.g. inside the source tree, with the folder on sys.path)
+if(NOT DEFINED SITE_PACKAGES_DIR)
+  execute_process(
+      COMMAND ${Python3_EXECUTABLE} -c "import site; print(site.getsitepackages()[0])"
+      OUTPUT_VARIABLE SITE_PACKAGES_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+endif()
+message(STATUS "Install directory of the Python modules: ${SITE_PACKAGES_DIR}")
 
 #find_package(Torch REQUIRED)
 
@@ -219,6 +246,13 @@ execute_process(
 execute_process(
   COMMAND python3 -c "from torch.utils import cpp_extension; print(cpp_extension.include_paths()[1])"
   OUTPUT_VARIABLE TORCH_API_INCLUDE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+# All of torch's include directories: their number and order depend on the torch build
+# (e.g. conda-forge's torch puts the environment's include directory first)
+execute_process(
+  COMMAND python3 -c "from torch.utils import cpp_extension; print(';'.join(cpp_extension.include_paths()))"
+  OUTPUT_VARIABLE TORCH_ALL_INCLUDE_DIRS
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
@@ -251,8 +285,12 @@ add_definitions(-D_GLIBCXX_USE_CXX11_ABI=${GLIBCXX_USE_CXX11_ABI})
 include_directories(${Python3_INCLUDE_DIRS})
 include_directories(${TORCH_INCLUDE_DIR})
 include_directories(${TORCH_API_INCLUDE_DIR})
+include_directories(${TORCH_ALL_INCLUDE_DIRS})
 #include_directories(${Torch_INCLUDE_DIRS})
 include_directories(${CUDA_INCLUDE_DIRS})
+if(CUDAToolkit_FOUND)
+  include_directories(${CUDAToolkit_INCLUDE_DIRS})  # e.g. <env>/targets/x86_64-linux/include in a conda environment
+endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lietorch/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/eigen)
