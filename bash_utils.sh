@@ -511,14 +511,21 @@ stop_sudo_alive() {
 # available memory.
 # Without the cap, machines with many cores but little memory (e.g. WSL2, which gets half of the
 # host memory by default) run out of memory and the compiler is killed. Most GTSAM files need
-# under 4 GB; a few files of the GTSAM Python wrapper need up to about 10 GB on their own.
+# under 4 GB; a few files of the GTSAM Python wrapper need up to about 12 GB on their own.
 # Set PYSLAM_BUILD_JOBS to choose the number of jobs yourself.
 function get_build_jobs(){
     if [[ -n "$PYSLAM_BUILD_JOBS" ]]; then
-        echo "$PYSLAM_BUILD_JOBS"
-        return
+        if [[ "$PYSLAM_BUILD_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+            echo "$PYSLAM_BUILD_JOBS"
+            return
+        fi
+        echo "WARNING: PYSLAM_BUILD_JOBS='$PYSLAM_BUILD_JOBS' is not a positive integer: ignored" >&2
     fi
-    local cores mem_mb jobs
+    local cores mem_mb jobs mem_per_job_gb="${PYSLAM_MEM_PER_JOB_GB:-4}"
+    if [[ ! "$mem_per_job_gb" =~ ^[1-9][0-9]*$ ]]; then
+        echo "WARNING: PYSLAM_MEM_PER_JOB_GB='$mem_per_job_gb' is not a positive integer: using 4" >&2
+        mem_per_job_gb=4
+    fi
     if [[ "$OSTYPE" == darwin* ]]; then
         cores=$(sysctl -n hw.logicalcpu)
         mem_mb=$(( $(sysctl -n hw.memsize) / 1048576 ))
@@ -526,7 +533,7 @@ function get_build_jobs(){
         cores=$(command nproc)
         mem_mb=$(( $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) / 1024 ))
     fi
-    jobs=$(( mem_mb / (${PYSLAM_MEM_PER_JOB_GB:-4} * 1024) ))
+    jobs=$(( mem_mb / (mem_per_job_gb * 1024) ))
     (( jobs > cores )) && jobs=$cores
     (( jobs < 1 )) && jobs=1
     echo "$jobs"
