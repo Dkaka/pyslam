@@ -956,9 +956,44 @@ class LoopClosing:
                 LoopClosing.print(f"\t traceback details: {traceback_details}")
 
     # main loop in LoopClosing thread
+    def open_debug_windows(self):
+        """Open the enabled debug windows (similarity matrix, loop candidates) at start-up, with a
+        placeholder image, so that they appear with the other windows instead of popping up in the
+        middle of a run. Called from the loop-closing thread, which draws into them later."""
+        if self.headless:
+            return
+        windows = []  # (name, flag attribute, text)
+        if Parameters.kLoopClosingDebugWithSimmetryMatrix:
+            windows.append(("loop closing: similarity matrix", "draw_similarity_matrix_init",
+                            "keyframe similarities: filled in as keyframes arrive"))
+        if self.loop_consistent_candidate_imgs is not None:
+            windows.append(("loop closing: consistent candidates", "draw_loop_consistent_candidate_imgs_init",
+                            "loop candidates that pass the consistency check"))
+        if Parameters.kLoopClosingDebugWithLoopDetectionImages:
+            windows.append(("loop-detection: candidates", "draw_loop_detection_imgs_init",
+                            "loop-detection candidates"))
+        for name, flag, text in windows:
+            img = np.full((300, 520, 3), 40, np.uint8)
+            cv2.putText(img, name, (15, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(img, text, (15, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
+            cv2.putText(img, "waiting for keyframes ...", (15, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (200, 200, 200), 1, cv2.LINE_AA)
+            if kUseCv2ForDrawing:
+                cv2.namedWindow(name, cv2.WINDOW_NORMAL)  # to get a resizable window
+                cv2.imshow(name, img)
+            else:
+                QimageViewer.get_instance().draw(img, name)
+            setattr(self, flag, True)
+        if windows and kUseCv2ForDrawing:
+            cv2.waitKey(1)
+
     def run(self):
         # thread execution
         LoopClosing.print("LoopClosing: starting...")
+        try:
+            self.open_debug_windows()
+        except Exception as e:
+            LoopClosing.print(f"LoopClosing: could not open the debug windows: {e}")
         self.is_running = True
         while not self.stop:
             # Steps:
