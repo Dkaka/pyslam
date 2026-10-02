@@ -41,16 +41,19 @@ LIB_PATHS:
   vpr: thirdparty/vpr, thirdparty/patch_netvlad
   depth_pro: thirdparty/ml_depth_pro/src
   depth_anything_v2: thirdparty/depth_anything_v2/metric_depth
+  depth_anything_v3: thirdparty/depth_anything_v3/src
   raft_stereo: thirdparty/raft_stereo, thirdparty/raft_stereo/core
   crestereo: thirdparty/crestereo
   crestereo_pytorch: thirdparty/crestereo_pytorch 
-  gaussian_splatting: thirdparty/monogs
+  gaussian_splatting: thirdparty/monogs, thirdparty/monogs/submodules/simple-knn, thirdparty/monogs/submodules/diff-gaussian-rasterization, thirdparty/lietorch/install
   mvdust3r: thirdparty/mvdust3r
   mast3r: thirdparty/mast3r, thirdparty/mast3r/dust3r/croco
+  fast3r: thirdparty/fast3r
   vggt: thirdparty/vggt
   vggt_robust: thirdparty/vggt_robust
+  f3rm: thirdparty/f3rm_pkg
   eov_segmentation: thirdparty/eov_segmentation
   detic: thirdparty/detic, thirdparty/detic/third_party/CenterNet2
-  odise: thirdparty/odise
+  odise: thirdparty/odise, thirdparty/odise/third_party/Mask2Former, thirdparty/stable_diffusion_sdkit
 
 

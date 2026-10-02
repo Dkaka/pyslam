@@ -45,6 +45,12 @@ except ImportError:
 if not hasattr(pkg_resources, "packaging"):
     pkg_resources.packaging = packaging
 
+# f3rm is unpacked into thirdparty/f3rm_pkg by scripts/install_extra.sh (without its dependencies:
+# only its CLIP module is used here); a pip-installed f3rm is used if there is one.
+import pyslam.config as config
+
+config.cfg.set_lib("f3rm")
+
 from f3rm.features.clip import clip as f3rm_clip
 from f3rm.features.clip import tokenize
 

@@ -7,9 +7,15 @@ model weights ahead of time, so that first use in a lab session does not stall o
 Each component runs in its own process on the bundled KITTI 06 test images:
 - local features / matchers: create the FeatureTrackerConfigs entry and match kitti06-12 vs kitti06-17;
 - VPR loop detectors: create the LoopDetectorConfigs entry and describe kitti06-12, -17 (same place)
-  and -435 (different place).
+  and -435 (different place);
+- depth and stereo estimators: create the DepthEstimatorType entry and infer a depth map from the
+  stereo pair kitti06-12 (the monocular models use the left image only);
+- semantic segmentation models: create the SemanticSegmentationType entry and segment kitti06-12;
+- scene-from-views models: create the SceneFromViewsType entry and reconstruct kitti06-12, -13, -14;
+  Gaussian splatting: run its three CUDA extensions (both skipped, with the reason, on a machine
+  without an NVIDIA GPU).
 
-usage: python scripts/extras_check.py <features|vpr> [COMPONENT ...]   (run from anywhere)
+usage: python scripts/extras_check.py <features|vpr|depth|semantics|scene3d> [COMPONENT ...]   (run from anywhere)
 Exits with 1 if any component fails.
 """
 import json
@@ -27,6 +33,12 @@ EXTRA_COMPONENTS = {
         "KEYNETAFFNETHARDNET", "BRISK_TFEAT", "ORB2_HARDNET", "ORB2_SOSNET", "ORB2_L2NET", "LOFTR",
     ],
     "vpr": ["ALEXNET", "NETVLAD", "COSPLACE", "EIGENPLACES", "MEGALOC"],
+    "depth": [
+        "DEPTH_ANYTHING_V2", "DEPTH_PRO", "DEPTH_RAFT_STEREO", "DEPTH_CRESTEREO_PYTORCH",
+        "DEPTH_ANYTHING_V3",
+    ],
+    "semantics": ["DEEPLABV3", "SEGFORMER", "YOLO", "RFDETR", "CLIP", "DETIC", "EOV_SEG", "ODISE"],
+    "scene3d": ["MAST3R", "DUST3R", "MVDUST3R", "VGGT", "VGGT_ROBUST", "FAST3R", "GAUSSIAN_SPLATTING"],
 }
 
 # Code run in a child process for one component. It prints one JSON line prefixed by RESULT.
@@ -53,6 +65,92 @@ try:
         kps2, des2 = tracker.detectAndCompute(img2)
         res = tracker.matcher.match(img1, img2, des1, des2, kps1, kps2)
         out["result"] = f"{len(res.idxs1)} matches"
+    elif kind == "depth":
+        from pyslam.depth_estimation.depth_estimator_factory import depth_estimator_factory, DepthEstimatorType
+        from pyslam.io.dataset_types import DatasetEnvironmentType
+        from pyslam.slam import PinholeCamera
+        cam = PinholeCamera(Config())
+        if not cam.bf:  # the stereo models need the baseline: KITTI's, as the test images are from KITTI 06
+            cam.bf = 379.8145
+            cam.b = cam.bf / cam.fx
+        est = depth_estimator_factory(
+            depth_estimator_type=DepthEstimatorType[name], camera=cam, max_depth=50,
+            dataset_env_type=DatasetEnvironmentType.OUTDOOR,
+        )
+        # a rectified stereo pair; the monocular models ignore the right image
+        depth, _ = est.infer(read("kitti06-12-color.png"), read("kitti06-12-R-color.png"))
+        depth = np.asarray(depth, dtype=np.float64)
+        valid = depth[np.isfinite(depth) & (depth > 0)]
+        if depth.ndim != 2 or valid.size < 0.5 * depth.size:
+            raise RuntimeError(f"depth map {depth.shape} has only {valid.size} valid values")
+        out["result"] = f"depth map {depth.shape[1]}x{depth.shape[0]}, median {np.median(valid):.1f} m"
+    elif kind == "semantics":
+        if name == "EOV_SEG" and not torch.cuda.is_available():
+            # its backbone uses detectron2's deformable convolution, which has no CPU implementation
+            out["status"] = "SKIP"
+            out["result"] = "needs an NVIDIA GPU with CUDA (deformable convolution)"
+            raise SystemExit
+        from pyslam.semantics.semantic_segmentation_factory import semantic_segmentation_factory
+        from pyslam.semantics.semantic_segmentation_types import SemanticSegmentationType
+        from pyslam.semantics.semantic_types import SemanticFeatureType, SemanticDatasetType
+        seg = semantic_segmentation_factory(
+            semantic_segmentation_type=SemanticSegmentationType[name],
+            semantic_feature_type=SemanticFeatureType.LABEL,
+            semantic_dataset_type=SemanticDatasetType.CITYSCAPES, image_size=(512, 512),
+        )
+        img = read("kitti06-12-color.png")
+        res = seg.infer(img)
+        labels = np.asarray(res.semantics)
+        if labels.shape[:2] != img.shape[:2]:
+            raise RuntimeError(f"label map {labels.shape} does not match the image {img.shape[:2]}")
+        n_inst = 0 if res.instances is None else len(np.unique(res.instances)) - 1
+        out["result"] = f"{len(np.unique(labels))} classes" + (f", {n_inst} instances" if res.instances is not None else "")
+    elif kind == "scene3d":
+        if not torch.cuda.is_available():
+            out["status"] = "SKIP"
+            out["result"] = "needs an NVIDIA GPU with CUDA"
+            raise SystemExit
+        if name == "GAUSSIAN_SPLATTING":
+            # the three CUDA extensions used by the Gaussian splatting integrator (MonoGS)
+            import glob
+            import pyslam.config as config
+            config.cfg.set_lib("gaussian_splatting")
+            built = [glob.glob(os.path.join(os.getcwd(), "thirdparty", p)) for p in (
+                "monogs/submodules/simple-knn/simple_knn/_C*.so",
+                "monogs/submodules/diff-gaussian-rasterization/diff_gaussian_rasterization/_C*.so",
+                "lietorch/install/lietorch_backends.so")]
+            if not all(built):
+                try:  # they may also be installed in the environment (the older install scripts did that)
+                    import simple_knn._C, diff_gaussian_rasterization  # noqa: F401
+                    from lietorch import SE3  # noqa: F401
+                except ImportError:
+                    out["status"] = "SKIP"
+                    out["result"] = "its CUDA extensions are not built (they need the CUDA compiler nvcc)"
+                    raise SystemExit
+            from simple_knn._C import distCUDA2
+            from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer  # noqa: F401
+            import lietorch
+            pts = torch.rand(2000, 3, device="cuda")
+            d2 = distCUDA2(pts)
+            T = lietorch.SE3.exp(0.1 * torch.randn(8, 6, device="cuda"))
+            err = float((T * T.inv()).log().abs().max())
+            if not (d2.shape[0] == 2000 and bool(torch.isfinite(d2).all()) and err < 1e-4):
+                raise RuntimeError(f"wrong results from the CUDA extensions (lietorch error {err:.2e})")
+            from monogs.gaussian_splatting_manager import GaussianSplattingManager  # noqa: F401
+            out["result"] = "simple_knn, diff_gaussian_rasterization and lietorch run on the GPU"
+            out["seconds"] = round(time.time() - t0, 1)
+            out["device"] = "cuda"
+            out["status"] = "OK"
+            raise SystemExit
+        from pyslam.scene_from_views import SceneFromViewsType, scene_from_views_factory
+        rec = scene_from_views_factory(scene_from_views_type=SceneFromViewsType[name])
+        imgs = [read(f) for f in ("kitti06-12-color.png", "kitti06-13-color.png", "kitti06-14-color.png")]
+        res = rec.reconstruct(images=imgs, as_pointcloud=True)
+        n_pts = 0 if res.global_point_cloud is None else len(res.global_point_cloud.vertices)
+        n_poses = 0 if res.camera_poses is None else len(res.camera_poses)
+        if n_pts < 1000:
+            raise RuntimeError(f"the reconstruction has only {n_pts} points")
+        out["result"] = f"{n_pts} points, {n_poses} camera poses from {len(imgs)} views"
     else:
         from pyslam.loop_closing.loop_detector_configs import LoopDetectorConfigs, loop_detector_factory
         det = loop_detector_factory(**getattr(LoopDetectorConfigs, name))
@@ -74,6 +172,8 @@ try:
     else:
         out["device"] = "cpu"
     out["status"] = "OK"
+except SystemExit:
+    pass  # the status and the result are already set
 except BaseException as e:  # noqa: BLE001
     out["error"] = f"{type(e).__name__}: {e}".splitlines()[0][:200]
 print("RESULT " + json.dumps(out), flush=True)
@@ -102,7 +202,7 @@ def main():
         sys.exit(2)
     kind = sys.argv[1]
     names = sys.argv[2:] or EXTRA_COMPONENTS[kind]
-    failed = []
+    failed, skipped = [], []
     tty = sys.stdout.isatty()
     for name in names:
         if tty:  # show what is running (a first run may be downloading model weights)
@@ -110,10 +210,14 @@ def main():
         r = check(kind, name)
         if r["status"] == "OK":
             print(f"  {name:22s} OK    {r['device']:4s} {r['seconds']:6.1f} s  {r['result']}", flush=True)
+        elif r["status"] == "SKIP":
+            skipped.append(name)
+            print(f"  {name:22s} SKIP  {r.get('result', '')}", flush=True)
         else:
             failed.append(name)
             print(f"  {name:22s} FAIL  {r.get('error', '')}", flush=True)
-    print(f"{len(names) - len(failed)}/{len(names)} components of '{kind}' OK"
+    print(f"{len(names) - len(failed) - len(skipped)}/{len(names)} components of '{kind}' OK"
+          + (f"; skipped: {', '.join(skipped)}" if skipped else "")
           + (f"; failed: {', '.join(failed)}" if failed else ""))
     sys.exit(1 if failed else 0)
 

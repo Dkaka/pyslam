@@ -1,3 +1,20 @@
+diff --git a/fast3r/models/multiview_dust3r_module.py b/fast3r/models/multiview_dust3r_module.py
+index f37459b..6c7613f 100644
+--- a/fast3r/models/multiview_dust3r_module.py
++++ b/fast3r/models/multiview_dust3r_module.py
+@@ -17,7 +17,11 @@ from torchmetrics.aggregation import BaseAggregator
+ from fast3r.dust3r.post_process import estimate_focal_knowing_depth_and_confidence_mask
+ from fast3r.dust3r.model import FlashDUSt3R
+ from fast3r.models.fast3r import Fast3R
+-from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
++try:
++    from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
++except ImportError:
++    # lightning-bolts requires pytorch-lightning < 2 and is only needed for training
++    LinearWarmupCosineAnnealingLR = None
+ from fast3r.eval.cam_pose_metric import camera_to_rel_deg, calculate_auc
+ from fast3r.eval.recon_metric import accuracy, completion
+ from fast3r.dust3r.cloud_opt.init_im_poses import fast_pnp
 diff --git a/fast3r/viz/demo.py b/fast3r/viz/demo.py
 index c075740..edbef9f 100644
 --- a/fast3r/viz/demo.py

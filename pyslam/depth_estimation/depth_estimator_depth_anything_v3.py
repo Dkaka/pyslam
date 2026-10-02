@@ -23,9 +23,9 @@ import os
 import sys
 import platform
 
-# import pyslam.config as config
+import pyslam.config as config
 
-# config.cfg.set_lib("depth_anything_v3")
+config.cfg.set_lib("depth_anything_v3")
 
 
 from pyslam.slam import Camera
