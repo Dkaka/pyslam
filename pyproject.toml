@@ -74,8 +74,8 @@ depth = [
   "pillow_heif",
   "gradio",
 ]
-# main_semantic_image_segmentation (on top of depth). Some backends need more packages, installed by
-# their install scripts (e.g. detectron2, open-clip-torch==2.24.0 for EOV-Seg).
+# main_semantic_image_segmentation (on top of depth). Some backends need more packages
+# (e.g. detectron2, open-clip-torch): see the semantics level in pixi.toml.
 semantics = [
   "pyslam[depth]",
   "transformers",

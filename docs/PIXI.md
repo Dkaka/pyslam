@@ -1,166 +1,181 @@
-# Install under pixi 
+# pySLAM with pixi
 
-Here you can find the instructions to install `pyslam` under `pixi` and a very concise `pixi` primer.
+[pixi](https://pixi.sh) installs pySLAM's Python environment from a lock file (`pixi.lock`), so
+everybody gets exactly the same package versions. The environment lives inside the repository
+folder (`.pixi/`): pixi does not touch conda, your `base` environment or `~/.condarc`.
 
 <!-- TOC -->
 
-- [Install under pixi](#install-under-pixi)
-  - [Install `pyslam` with pixi](#install-pyslam-with-pixi)
-    - [Install pixi](#install-pixi)
-    - [Activate pixi shell](#activate-pixi-shell)
-    - [Launch the `pyslam` install script](#launch-the-pyslam-install-script)
-    - [Launch a main `pyslam` script](#launch-a-main-pyslam-script)
-  - [Pixi primer](#pixi-primer)
-    - [Initialize a Project](#initialize-a-project)
-    - [Add dependancies](#add-dependancies)
-    - [Run Commands in Environment](#run-commands-in-environment)
-    - [Enter an interactive shell](#enter-an-interactive-shell)
-    - [Add specific platform targets](#add-specific-platform-targets)
-    - [Remove the local pixi environment](#remove-the-local-pixi-environment)
-    - [Table of commands](#table-of-commands)
-  - [References](#references)
+- [pySLAM with pixi](#pyslam-with-pixi)
+  - [Levels](#levels)
+  - [Supported systems](#supported-systems)
+  - [Install](#install)
+    - [1. Install pixi](#1-install-pixi)
+    - [2. Get the code](#2-get-the-code)
+    - [3. Build the default level](#3-build-the-default-level)
+    - [4. Move up a level](#4-move-up-a-level)
+  - [Run](#run)
+  - [Tasks](#tasks)
+  - [Good to know](#good-to-know)
+  - [For maintainers](#for-maintainers)
 
 <!-- /TOC -->
 
----
+## Levels
 
+The environment comes in levels. Each level runs more of the `main_*.py` scripts and **includes the
+levels below it**.
 
-## Install `pyslam` with pixi
+| level | adds these scripts | adds these components |
+|---|---|---|
+| `default` | `main_vo.py`, `main_feature_matching.py`, `main_slam.py`, `main_map_viewer.py`, `main_slam_evaluation.py`, `main_map_dense_reconstruction.py` (TSDF / voxel grid) | classic visual odometry and SLAM, loop closing, the viewers; learned features and matchers (SuperPoint, LightGlue, XFeat, DISK, ALIKED, ...) and learned place recognition (NetVLAD, CosPlace, EigenPlaces, MegaLoc) |
+| `depth` | `main_depth_prediction.py`; depth prediction inside SLAM and dense reconstruction | Depth Anything V2 and V3, Depth Pro, RAFT-Stereo, CREStereo |
+| `semantics` | `main_semantic_image_segmentation.py`; semantic mapping | DeepLabV3, SegFormer, YOLO, RF-DETR, CLIP, Detic, EOV-Seg, ODISE |
+| `full` | `main_scene_from_views.py`; Gaussian splatting | MASt3R, DUSt3R, MV-DUSt3R, VGGT, Robust VGGT, Fast3R; MonoGS |
 
-Currently, pixi support is experimental and may encounter issues with building and linking.
+Start with `default` and move up when you need a script of a higher level. Moving up downloads only
+the packages that level adds; the native modules do **not** need to be rebuilt.
 
-Follow the steps reported below: 
+On **Linux without an NVIDIA GPU**, use the CPU levels instead: `default-cpu`, `depth-cpu`,
+`semantics-cpu`, `full-cpu`.
 
-### Install pixi 
-```
+## Supported systems
+
+| system | GPU | levels |
+|---|---|---|
+| Linux x86-64 with an NVIDIA GPU and a recent driver | CUDA 12.9, from Pascal (GTX 10xx, Titan Xp) to the RTX 50 series | `default`, `depth`, `semantics`, `full`: tested (RTX 5090, driver 575) |
+| Linux x86-64 without an NVIDIA GPU | none | `default-cpu`, `depth-cpu`, `semantics-cpu`, `full-cpu`: tested. EOV-Seg and everything `full` adds need an NVIDIA GPU and are skipped |
+| macOS 14 or later, Apple silicon | the Apple GPU (MPS) | `default`, `depth`, `semantics`, `full` (the 3R models and Gaussian splatting of `full` need an NVIDIA GPU): not tested yet |
+| Windows | via WSL2 (Ubuntu inside Windows): follow the Linux instructions | as Linux: not tested yet |
+
+You do not need to install the CUDA toolkit or a compiler: both are part of the environment.
+
+Disk space: about 20 GB for all four levels together (they share their files), plus the model
+weights you download, which add up to tens of GB if you install every level.
+
+## Install
+
+### 1. Install pixi
+
+```bash
 curl -fsSL https://pixi.sh/install.sh | sh
 ```
 
-Reference: https://pixi.sh/latest/#installation
+Open a new terminal afterwards, and check with `pixi --version` (0.81 or later).
 
-
-### Activate pixi shell 
-
-From the root folder of this repository, run
-```bash
-pixi shell 
-```
-
-### Launch the `pyslam` install script 
-
-Then, from the root folder, run
-```bash
-./install_all.sh
-```
-
-This script will prepare the pixi-dedicated `pyslam` environment, and build the required thirdparty packages. Under the hood, the script `install_all.sh` calls the pixi-specific script `scripts/install_all_pixi.sh`. 
-
-### Launch a main `pyslam` script
-
-Once you have activate the pixi shell in your terminal, you're ready to run any main script.
-
-
---- 
-
-## Pixi primer
-
-###  Initialize a Project
-
-From within your project folder:
-```bash
-pixi init
-```
-This creates a pixi.toml (like pyproject.toml) describing your environment.
-
-
-### Add dependancies 
-
-Conda packages (from conda-forge):
-```bash
-pixi add numpy scipy matplotlib
-```
-
-Pip packages:
-```bash
-pixi add pip
-pixi run pip install opencv-python
-```
-Then manually edit pixi.toml to reflect pip-installed packages:
-
-```toml
-[pypi-dependencies]
-opencv-python = "*"
-```
-
-### Run Commands in Environment
-
-
-To test the environement: 
-```bash
-pixi run python -c "import numpy; print(numpy.__version__)"
-pixi run python -c "import cv2; print(cv2.__version__)" 
-``` 
-
-Other examples: 
-```bash
-pixi run python script.py
-pixi run jupyter notebook
-```
-
-### Enter an interactive shell 
+### 2. Get the code
 
 ```bash
-pixi shell
-```
-This opens a shell with pixi enviornment variable already set and you don't need anymore to use `pixi run ...<python command>`.
-
-
-### Add specific platform targets 
-
-Add specific platform targets (e.g., cross-platform builds):
-```toml
-[tool.pixi]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+git clone https://github.com/sjulier/pyslam.git
+cd pyslam
 ```
 
-### Remove the local pixi environment 
+Run all the commands below from this folder.
 
-To delete the environment associated with the current project (i.e., clean slate):
+### 3. Build the default level
+
 ```bash
-pixi clean --all
-``` 
-
-This removes:
-- The current environment’s packages
-- The build cache
-- Any temporary/lock artifacts
-
-You can then rebuild it cleanly with:
-```bash
-pixi install
+pixi run build      # downloads the environment, then builds pySLAM's native modules (about 15 min)
+pixi run check      # the native modules load and the optimiser tests pass
+pixi run models     # learned features and place recognition: code, model weights, and a check of each
 ```
 
-### Table of commands
+`pixi run build` is safe to re-run: it skips what is already built. `pixi run models` prints one line
+per component, `OK` with the device it ran on (`cuda`, `mps` or `cpu`), and ends with a summary such
+as `19/19 components of 'features' OK`.
 
-This is a recap table:
+On Linux without an NVIDIA GPU, add `-e default-cpu` to each command (`pixi run -e default-cpu build`).
 
-| Command                     | Description                           |
-| --------------------------- | ------------------------------------- |
-| `pixi init`                 | Initialize a new project              |
-| `pixi add <pkg>`            | Add a dependency                      |
-| `pixi install`              | Re-resolve and install dependencies   |
-| `pixi run <cmd>`            | Run a command in the environment      |
-| `pixi shell`                | Enter an interactive shell            |
-| `pixi remove <pkg>`         | Remove a package                      |
-| `pixi list`                 | List installed packages               |
-| `pixi export --format toml` | Export environment definition as TOML |
-| `pixi update`               | Update dependencies and re-lock       |
-| `pixi clean --all`          | Remove the local pixi environment     |   
+### 4. Move up a level
 
+Install a level's models when you first need it. Each command also checks every component it
+installed.
 
----
+```bash
+pixi run -e depth models-depth            # depth and stereo models
+pixi run -e semantics models-semantics    # segmentation and detection models
+pixi run -e full models-scene3d           # 3R models and Gaussian splatting (NVIDIA GPU; builds CUDA extensions)
+```
 
-## References
+## Run
 
-- _"Cross-Platform Package Management for Modern C++ Development with Pixi - Ruben Arts - CppCon 2025"_ 
-  https://www.youtube.com/watch?v=SQk0lKv2swk
+Every main script has a task. Arguments after the task name are passed to the script.
+
+```bash
+pixi run slam                         # main_slam.py on the bundled KITTI 06 video
+pixi run slam --headless              # without windows; prints the trajectory error at the end
+pixi run vo
+pixi run feature-matching
+pixi run -e depth depth-prediction
+pixi run -e semantics semantic-segmentation
+pixi run -e full scene-from-views --method MAST3R
+```
+
+A level also runs the tasks of the levels below it (`pixi run -e full slam`). To work inside an
+environment instead of prefixing every command, open a shell in it:
+
+```bash
+pixi shell -e semantics
+python main_semantic_image_segmentation.py
+```
+
+## Tasks
+
+| task | level | what it does |
+|---|---|---|
+| `build` | default | build the native modules (GTSAM, g2o, Pangolin, DBoW2/3, iBoW, ORB-SLAM2 features, C++ utilities, C++ core), then check that they share one pybind11 ABI |
+| `check` | default | the ABI check and the GTSAM and g2o optimiser tests |
+| `models` | default | learned features and place recognition: `scripts/install_extra.sh features vpr` |
+| `models-depth` | depth | `scripts/install_extra.sh depth` |
+| `models-semantics` | semantics | `scripts/install_extra.sh semantics` |
+| `models-scene3d` | full | `scripts/install_extra.sh scene3d` |
+| `slam`, `vo`, `feature-matching`, `map-viewer`, `slam-evaluation`, `dense-reconstruction` | default | the main scripts |
+| `depth-prediction` | depth | `main_depth_prediction.py` |
+| `semantic-segmentation` | semantics | `main_semantic_image_segmentation.py` |
+| `scene-from-views` | full | `main_scene_from_views.py` |
+
+`pixi task list` shows them all. The single build steps are tasks too (`build-gtsam`, `build-g2o`,
+`build-cpp-core`, ...), to re-run one of them.
+
+## Good to know
+
+- **The native modules belong to the level they were built in.** They are built once, in the source
+  tree, and every level of a ladder uses them. If you delete the environment you built them in
+  (`pixi clean`, or removing `.pixi/envs/default`), run `pixi run build` again after removing the
+  build folders (`./clean.sh`). The GPU levels and the CPU levels are two separate ladders: build
+  again when you change between them.
+- **Model code is not installed into the environment.** `scripts/install_extra.sh` clones each model
+  at a fixed version into `thirdparty/`, applies pySLAM's patches and downloads the weights. It can be
+  re-run at any time, and it skips what is already there.
+- **`--headless` runs as fast as it can**, several times faster than the camera, which leaves the
+  mapping thread less time per frame: on KITTI 06 it then sometimes loses track at the turns. With
+  the windows (no `--headless`) pySLAM keeps the camera's frame rate. Keep this in mind when you
+  compare results of headless runs.
+- **A component is skipped, with the reason, when the machine cannot run it** (for example the 3R
+  models without an NVIDIA GPU). A skipped component is not a failure.
+- **Gaussian splatting on another GPU.** Its CUDA extensions are built for the GPUs in the machine.
+  To build them for other GPUs, set `PYSLAM_CUDA_ARCHS` and `LIETORCH_CUDA_ARCHS` (for example `61`
+  for Pascal, `86` for the RTX 30 series) before `pixi run -e full models-scene3d`.
+- **Not available with pixi**: SURF (non-free); the TensorFlow-based features (DELF, LF-Net,
+  ContextDesc, GeoDesc), which need their own environment; CREStereo's original MegEngine version
+  (the PyTorch port is installed); pytorch3d.
+- **Do not `pip install` into the environment.** A package that is missing belongs in `pixi.toml`.
+- **`pip check`** reports nothing in the `default` and `depth` levels. In `semantics` and `full` it
+  reports that detectron2 requires `black`: detectron2's metadata pins that code formatter, which is
+  not used at run time and is not installed.
+- **Remove everything pixi installed** with `pixi clean` (it deletes `.pixi/`).
+
+## For maintainers
+
+- `pixi.toml` defines small *features* (`build`, `slam`, `torch`, `cuda`, `cpu`, `depth`,
+  `semantics`, `recon3d`, `tf`, `dev`) and combines them into the level environments. The levels of
+  a ladder share a *solve group*, so they have identical versions of every shared package: that is
+  why one build of the native modules serves them all.
+- Packages come from conda-forge. PyPI is used only for packages that conda-forge does not have, or
+  has in a version that would force older versions of the main packages.
+- After changing `pixi.toml`, run `pixi lock` and **read the lock's diff**: one package with old
+  requirements can pull OpenCV, PyTorch or Open3D back to older versions in every level. Then run
+  `pixi run check` and the `models*` tasks of the levels you changed.
+- Linux is pinned to CUDA 12.9 (`cuda-version`), whose builds still support Pascal and Volta GPUs.
+- The TensorFlow level (`tf`) only has its packages so far; the features that use it are not
+  connected yet.
