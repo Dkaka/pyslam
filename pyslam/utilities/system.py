@@ -107,6 +107,17 @@ class MissingImport:
         raise RuntimeError(self.message())
 
 
+def is_main_process():
+    """True in the main process, False in multiprocessing workers. A spawned worker (macOS) re-imports
+    the modules before multiprocessing.parent_process() is set, but its name is set already."""
+    import multiprocessing
+
+    return (
+        multiprocessing.parent_process() is None
+        and multiprocessing.current_process().name == "MainProcess"
+    )
+
+
 def import_native_module(name, build_hint):
     """Import a pySLAM native (C++/pybind11) module, or raise ModuleNotFoundError with how to build it.
 

@@ -281,7 +281,11 @@ class Slam(object):
             if do_start_loop_closing:
                 self.loop_closing.start()
                 try:
-                    wait_for_ready(self.loop_closing.is_ready, "LoopClosing")
+                    wait_for_ready(
+                        self.loop_closing.is_ready,
+                        "LoopClosing",
+                        message="Setting up the loop-closing process (loading the vocabulary or model)",
+                    )
                 except Exception:
                     # Stop what has already started, so that the program exits with the error
                     # instead of hanging on the remaining threads and processes.
