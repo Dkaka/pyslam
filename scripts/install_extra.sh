@@ -109,6 +109,34 @@ function download_file() {
     fi
 }
 
+# gdrive_download_file <Google Drive file id> <file>: download from Google Drive unless the file is
+# already there. gdown alone has no timeout and writes straight to the final name; this goes through
+# pySLAM's downloader, which restarts (and resumes) a stalled download and renames only on success.
+function gdrive_download_file() {
+    if [ ! -s "$2" ]; then
+        print_blue "Downloading $(basename "$2") ..."
+        ensure_python_package "$PYTHON_EXE" gdown gdown || exit 1
+        mkdir -p "$(dirname "$2")"
+        PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_EXE" -c '
+import sys
+from pyslam.utilities.file_management import gdrive_download_with_retry
+gdrive_download_with_retry("https://drive.google.com/uc?id=" + sys.argv[1], sys.argv[2])' "$1" "$2" \
+            || { print_red "ERROR: could not download $(basename "$2") from Google Drive (run this script again to resume)"; exit 1; }
+    fi
+}
+
+# component <name> <function>: install one component in a subshell, so that a failure (a download
+# that breaks, a build error) is reported and the other components of the extra are still installed
+COMPONENT_FAILURES=""
+function component() {
+    local name="$1"
+    shift
+    if ! ( "$@" ); then
+        print_red "ERROR: $name was not installed (see above); continuing with the other components"
+        COMPONENT_FAILURES="$COMPONENT_FAILURES${COMPONENT_FAILURES:+, }$name"
+    fi
+}
+
 function install_features() {
     init_submodules thirdparty/superpoint thirdparty/LightGlue thirdparty/accelerated_features \
         thirdparty/disk thirdparty/d2net thirdparty/r2d2 thirdparty/keynet thirdparty/hardnet \
@@ -118,24 +146,30 @@ function install_features() {
     apply_patch keynet keynet.patch
     apply_patch LightGlue lightglue.patch
     # D2-Net weights (the other models are downloaded by the check below, on first creation)
+    component "D2-Net" install_d2net_model
+}
+
+function install_d2net_model() {
     if [ ! -f thirdparty/d2net/models/d2_ots.pth ]; then
-        print_blue "Downloading the D2-Net model ..."
-        ensure_python_package "$PYTHON_EXE" gdown gdown || exit 1
-        make_dir thirdparty/d2net/models
-        ( cd thirdparty/d2net/models && gdrive_download "12Uk95TjBT7VZSEitvm3B3XNK37Q_uU8T" "d2net.tar.xz" \
-            && tar -xf d2net.tar.xz && rm d2net.tar.xz ) || { print_red "ERROR: could not download the D2-Net model"; exit 1; }
+        gdrive_download_file "12Uk95TjBT7VZSEitvm3B3XNK37Q_uU8T" thirdparty/d2net/models/d2net.tar.xz
+        ( cd thirdparty/d2net/models && tar -xf d2net.tar.xz && rm d2net.tar.xz ) \
+            || { print_red "ERROR: could not unpack the D2-Net model"; exit 1; }
     fi
+}
+
+function install_netvlad_model() {
+    # NetVLAD weights: pySLAM uses configs/netvlad_extract.ini, i.e. the Mapillary model with 512
+    # principal components (92 MB). Without this file Patch-NetVLAD downloads all its seven models
+    # (2.9 GB) at the first use, with a downloader that cannot resume.
+    download_file "https://huggingface.co/TobiasRobotics/Patch-NetVLAD/resolve/main/mapillary_WPCA512.pth.tar?download=true" \
+        thirdparty/patch_netvlad/patchnetvlad/pretrained_models/mapillary_WPCA512.pth.tar
 }
 
 function install_vpr() {
     init_submodules thirdparty/vpr thirdparty/patch_netvlad
     apply_patch vpr vpr.patch
     apply_patch patch_netvlad patch_netvlad.patch
-    # NetVLAD weights: pySLAM uses configs/netvlad_extract.ini, i.e. the Mapillary model with 512
-    # principal components (92 MB). Without this file Patch-NetVLAD downloads all its seven models
-    # (2.9 GB) at the first use, with a downloader that cannot resume.
-    download_file "https://huggingface.co/TobiasRobotics/Patch-NetVLAD/resolve/main/mapillary_WPCA512.pth.tar?download=true" \
-        thirdparty/patch_netvlad/patchnetvlad/pretrained_models/mapillary_WPCA512.pth.tar
+    component "NetVLAD" install_netvlad_model
     # torch >= 2.13 asks "Do you trust this repository?" on the first torch.hub.load of a repo, which
     # a loop-detection child process cannot answer: trust the repos used by the VPR detectors.
     "$PYTHON_EXE" - <<'EOF' || exit 1
@@ -151,36 +185,58 @@ print("torch.hub trusted repos:", ", ".join(sorted(trusted | set(new))))
 EOF
 }
 
-function install_depth() {
+function install_depth_pro() {
     # Depth Pro (monocular, metric)
     clone_repo ml_depth_pro https://github.com/apple/ml-depth-pro.git
     apply_patch ml_depth_pro ml_depth_pro.patch
-    if [ ! -f thirdparty/ml_depth_pro/checkpoints/depth_pro.pt ]; then
-        print_blue "Downloading the Depth Pro model (about 1.9 GB) ..."
-        ( cd thirdparty/ml_depth_pro && bash get_pretrained_models.sh ) || { print_red "ERROR: could not download the Depth Pro model"; exit 1; }
-    fi
+    download_file https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt thirdparty/ml_depth_pro/checkpoints/depth_pro.pt   # 1.9 GB
+}
 
+function install_depth_anything_v2() {
     # Depth Anything V2 (monocular, metric indoor/outdoor models)
     clone_repo depth_anything_v2 https://github.com/DepthAnything/Depth-Anything-V2.git
     apply_patch depth_anything_v2 depth_anything_v2.patch
-    ( cd thirdparty/depth_anything_v2 && "$PYTHON_EXE" download_metric_models.py ) || { print_red "ERROR: could not download the Depth Anything V2 models"; exit 1; }
+    local dataset size model
+    for dataset in Hypersim VKITTI; do
+        for size in Small:vits Base:vitb Large:vitl; do
+            model="depth_anything_v2_metric_$(echo "$dataset" | tr '[:upper:]' '[:lower:]')_${size#*:}.pth"
+            download_file "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-$dataset-${size%:*}/resolve/main/$model?download=true" \
+                "thirdparty/depth_anything_v2/metric_depth/checkpoints/$model"
+        done
+    done
+}
 
-    # RAFT-Stereo
+function install_raft_stereo() {
     # (thirdparty/raft_stereo.patch only fixed the model links, which upstream has fixed since)
     clone_repo raft_stereo https://github.com/princeton-vl/RAFT-Stereo.git 6e93ed2169bd858dbb43033988563f3b0bb49506
-    if [ ! -d thirdparty/raft_stereo/models ]; then
-        print_blue "Downloading the RAFT-Stereo models ..."
-        ( cd thirdparty/raft_stereo && bash download_models.sh ) || { print_red "ERROR: could not download the RAFT-Stereo models"; exit 1; }
+    if [ ! -f thirdparty/raft_stereo/models/raftstereo-middlebury.pth ]; then
+        # the link is the one of RAFT-Stereo's download_models.sh
+        download_file "https://www.dropbox.com/scl/fi/5khx1bhz84dapi8vtwapg/models.zip?rlkey=ggddrn1du1iiq6mgc2dsdpmwi&dl=1" \
+            thirdparty/raft_stereo/models/models.zip
+        ( cd thirdparty/raft_stereo/models && unzip -o -q models.zip && rm -f models.zip ) \
+            || { print_red "ERROR: could not unpack the RAFT-Stereo models"; exit 1; }
     fi
+}
 
+function install_crestereo_pytorch() {
     # CREStereo, PyTorch port (the original needs MegEngine, which is not supported here)
     clone_repo crestereo_pytorch https://github.com/ibaiGorordo/CREStereo-Pytorch.git
     apply_patch crestereo_pytorch crestereo_pytorch.patch
-    ( cd thirdparty/crestereo_pytorch && "$PYTHON_EXE" download_models.py ) || { print_red "ERROR: could not download the CREStereo model"; exit 1; }
+    gdrive_download_file "1pNVdaSvkgCK9NuU1i66nZVNg87VsGxox" thirdparty/crestereo_pytorch/models/crestereo_eth3d.pth
+}
 
+function install_depth_anything_v3() {
     # Depth Anything V3 (monocular); its weights are downloaded by the check below, on first creation
     clone_repo depth_anything_v3 https://github.com/ByteDance-Seed/depth-anything-3 ed6989a23cd389e975ed9f7cbd7385396e6d867e
     apply_patch depth_anything_v3 depth_anything_v3.patch
+}
+
+function install_depth() {
+    component "Depth Pro" install_depth_pro
+    component "Depth Anything V2" install_depth_anything_v2
+    component "RAFT-Stereo" install_raft_stereo
+    component "CREStereo" install_crestereo_pytorch
+    component "Depth Anything V3" install_depth_anything_v3
 }
 
 # unpack_pypi_package <requirement> <thirdparty dir>: download the wheel of a pure-Python package from
@@ -198,13 +254,12 @@ function unpack_pypi_package() {
     rm -rf "$tmp_dir"
 }
 
-function install_semantics() {
-    # DeepLabV3, SegFormer and YOLO need no code here: their weights are downloaded by the check below.
-
-    # RF-DETR
+function install_rf_detr() {
     clone_repo rf_detr https://github.com/roboflow/rf-detr.git fd1295b8ccacba0fad2b4a40c8a35b67bc62c335
     apply_patch rf_detr rf_detr.patch
+}
 
+function install_detic() {
     # Detic (with its CenterNet2 submodule)
     if [ ! -d thirdparty/detic/.git ]; then
         clone_repo detic https://github.com/facebookresearch/Detic.git 436cda2a2347df60a7c66daca0e8c59f93dc5e79
@@ -214,19 +269,15 @@ function install_semantics() {
     apply_patch detic/third_party/CenterNet2 detic/third_party/centernet2.patch  # created by detic.patch
     download_file https://dl.fbaipublicfiles.com/detic/Detic_LCOCOI21k_CLIP_SwinB_896b32_4x_ft4x_max-size.pth \
         thirdparty/detic/models/Detic_LCOCOI21k_CLIP_SwinB_896b32_4x_ft4x_max-size.pth
+}
 
-    # EOV-Seg
+function install_eov_seg() {
     clone_repo eov_segmentation https://github.com/nhw649/EOV-Seg.git 6f5e93e9aca6ccae89fe492b24018f8530075fc4
     apply_patch eov_segmentation eov_segmentation.patch
-    if [ ! -s thirdparty/eov_segmentation/checkpoints/convnext-l.pth ]; then
-        print_blue "Downloading the EOV-Seg model ..."
-        ensure_python_package "$PYTHON_EXE" gdown gdown || exit 1
-        make_dir thirdparty/eov_segmentation/checkpoints
-        ( cd thirdparty/eov_segmentation/checkpoints && gdrive_download "1dVfHpzmCOlV6hLfUpd3nHXz62wdB7RY2" "convnext-l.pth" ) \
-            || { print_red "ERROR: could not download the EOV-Seg model"; exit 1; }
-    fi
+    gdrive_download_file "1dVfHpzmCOlV6hLfUpd3nHXz62wdB7RY2" thirdparty/eov_segmentation/checkpoints/convnext-l.pth   # 2.1 GB
+}
 
-    # ODISE
+function install_odise() {
     clone_repo odise https://github.com/NVlabs/ODISE.git 2b187e4b2ff4c3d5da342aec2cc234b537720a65
     apply_patch odise odise.patch
     # ODISE is imported from its source folder (no pip install). Its model zoo looks for the configs
@@ -242,12 +293,23 @@ function install_semantics() {
         sed -i.bak 's/from pytorch_lightning.utilities.distributed import rank_zero_only/from pytorch_lightning.utilities.rank_zero import rank_zero_only/' \
             thirdparty/stable_diffusion_sdkit/ldm/models/diffusion/ddpm.py && rm -f thirdparty/stable_diffusion_sdkit/ldm/models/diffusion/ddpm.py.bak
     fi
+}
 
+function install_clip_segmentation() {
     # CLIP segmentation uses the CLIP module of f3rm. The package depends on nerfstudio, which is
     # not needed for that module, so it is unpacked without its dependencies as well.
     if [ ! -f thirdparty/f3rm_pkg/f3rm/features/clip/clip.py ]; then
         unpack_pypi_package "f3rm==0.0.6" f3rm_pkg
     fi
+}
+
+function install_semantics() {
+    # DeepLabV3, SegFormer and YOLO need no code here: their weights are downloaded by the check below.
+    component "RF-DETR" install_rf_detr
+    component "Detic" install_detic
+    component "EOV-Seg" install_eov_seg
+    component "ODISE" install_odise
+    component "CLIP segmentation" install_clip_segmentation
 }
 
 # cuda_home: the CUDA toolkit that torch's cpp_extension should use (it takes nvcc from $CUDA_HOME/bin):
@@ -297,12 +359,7 @@ function build_cuda_extension_inplace() {
         || { print_red "ERROR: could not build $2 (is the CUDA compiler nvcc available?)"; exit 1; }
 }
 
-function install_scene3d() {
-    if ! has_cuda; then
-        print_yellow "The scene3d models (MASt3R, DUSt3R, MV-DUSt3R, VGGT, Fast3R) need an NVIDIA GPU with CUDA: skipping them on this machine."
-        return 0
-    fi
-
+function install_mast3r() {
     # MASt3R (with DUSt3R and CroCo as submodules)
     if [ ! -d thirdparty/mast3r/.git ]; then
         clone_repo mast3r https://github.com/naver/mast3r f5209afc300cec36239a7ac992263f36847bbba0
@@ -314,23 +371,30 @@ function install_scene3d() {
     build_curope mast3r/dust3r/croco/models/curope
     download_file https://download.europe.naverlabs.com/ComputerVision/MASt3R/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric.pth \
         thirdparty/mast3r/checkpoints/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric.pth
+}
 
-    # MV-DUSt3R
+function install_mvdust3r() {
     clone_repo mvdust3r https://github.com/facebookresearch/mvdust3r.git 430ca6630b07567cfb2447a4dcee9747b132d5c7
     apply_patch mvdust3r mvdust3r.patch
     build_curope mvdust3r/croco/models/curope
-    make_dir thirdparty/mvdust3r/checkpoints
-    cp "$ROOT_DIR/thirdparty/mvdust3r_scripts/download_models.py" thirdparty/mvdust3r/checkpoints/
-    ( cd thirdparty/mvdust3r/checkpoints && "$PYTHON_EXE" download_models.py ) || { print_red "ERROR: could not download the MV-DUSt3R models"; exit 1; }
+    # pySLAM uses the MV-DUSt3R model MVD.pth (6.6 GB). The other checkpoints of MV-DUSt3R (MV-DUSt3R+
+    # stages 1 and 2 and DUSt3R 224, 18 GB more) are not used: for those, see
+    # thirdparty/mvdust3r_scripts/download_models.py.
+    download_file https://huggingface.co/Zhenggang/MV-DUSt3R/resolve/main/checkpoints/MVD.pth thirdparty/mvdust3r/checkpoints/MVD.pth
+}
 
+function install_vggt() {
     # VGGT and Robust VGGT (their weights are downloaded by the check below, on first creation)
     clone_repo vggt https://github.com/facebookresearch/vggt.git a288dd0f14786c93483e45524328726ab7b1b4ce
     clone_repo vggt_robust https://github.com/cvlab-kaist/RobustVGGT.git 0763ed6484b1e91a2b8bd5072d317745743492cc
+}
 
-    # Fast3R
+function install_fast3r() {
     clone_repo fast3r https://github.com/facebookresearch/fast3r.git 33104d4b5b8df43795ecded236194958bbdac572
     apply_patch fast3r fast3r.patch
+}
 
+function install_gaussian_splatting() {
     # Gaussian splatting (MonoGS): three CUDA extensions, built in the source tree and found through
     # config_libs.yaml (nothing is installed into the environment, and no sudo is needed)
     if ! command -v nvcc &>/dev/null; then
@@ -366,6 +430,18 @@ function install_scene3d() {
     fi
 }
 
+function install_scene3d() {
+    if ! has_cuda; then
+        print_yellow "The scene3d models (MASt3R, DUSt3R, MV-DUSt3R, VGGT, Fast3R) need an NVIDIA GPU with CUDA: skipping them on this machine."
+        return 0
+    fi
+    component "MASt3R and DUSt3R" install_mast3r
+    component "MV-DUSt3R" install_mvdust3r
+    component "VGGT and Robust VGGT" install_vggt
+    component "Fast3R" install_fast3r
+    component "Gaussian splatting" install_gaussian_splatting
+}
+
 if [[ $# -eq 0 || "$1" == "--list" || "$1" == "-h" || "$1" == "--help" ]]; then
     echo "usage: $0 --list | <extra> [<extra> ...]"
     list_extras
@@ -392,8 +468,14 @@ for extra in "$@"; do
 done
 
 cd "$STARTING_DIR"
+if [[ -n "$COMPONENT_FAILURES" ]]; then
+    print_red "Not installed: $COMPONENT_FAILURES (see the errors above). Run this script again: it skips what is"
+    print_red "already installed and resumes interrupted downloads."
+fi
 if [[ -n "$FAILED" ]]; then
     print_red "Some components failed the check in:$FAILED (see above)"
+fi
+if [[ -n "$COMPONENT_FAILURES$FAILED" ]]; then
     exit 1
 fi
 print_green "Installed: $*"
