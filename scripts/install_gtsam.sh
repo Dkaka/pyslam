@@ -119,9 +119,6 @@ WITH_MARCH_NATIVE=ON
 if [[ "$OSTYPE" == darwin* ]]; then
     WITH_MARCH_NATIVE=OFF
 fi
-if [[ "$PIXI_ACTIVATED" == true ]]; then
-    WITH_MARCH_NATIVE=OFF
-fi
 echo "WITH_MARCH_NATIVE: $WITH_MARCH_NATIVE"
 
 # gtwrap (GTSAM Python bindings) needs pyparsing at build time, and the python install generates

@@ -259,7 +259,7 @@ The install procedure was tested under *Ubuntu 20.04*, *22.04* and *24.04*.
 
 - With **venv** (**recommended**): Follow the instructions reported [here](./docs/PYTHON-VIRTUAL-ENVS.md).  
 - With **conda**: Run the procedure described in this other [file](./docs/CONDA.md).
-- With **pixi**: Run `pixi shell` in the root folder of the repo before launching `./install_all.sh` (see this [file](./docs/PIXI.md) for further details). Currently, pixi support is experimental and may encounter issues with building and linking.
+- With **pixi**: run `pixi run build` in the root folder of the repo: it installs the environment from the lock file and builds the native modules; the optional models are then installed per level (see this [file](./docs/PIXI.md) for the levels and the commands).
 
 The install process creates a new Python virtual environment `pyslam`.
 

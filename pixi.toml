@@ -1,146 +1,355 @@
+# pySLAM pixi workspace
+#
+# One lock file, several environments built from small features:
+#
+#   level        main scripts it runs (each level includes the ones above it)
+#   -----------  -------------------------------------------------------------------
+#   default      main_vo, main_feature_matching, main_slam, main_map_viewer,
+#                main_slam_evaluation, main_map_dense_reconstruction (TSDF/voxel).
+#                Classic SLAM plus (i) learned features and place recognition.
+#   depth        + main_depth_prediction; depth inference in SLAM and dense
+#                reconstruction: (i.a) depth and stereo models
+#   semantics    + main_semantic_image_segmentation; semantic mapping:
+#                (ii) segmentation and object detection
+#   full         + main_scene_from_views; Gaussian splatting: (iv) 3D representations
+#
+#   tf           TensorFlow-based features, run as a worker process
+#
+# `pixi run` without -e uses default. On Linux without an NVIDIA GPU use the CPU
+# ladder: default-cpu, depth-cpu, semantics-cpu, full-cpu. macOS uses the names above (MPS).
+#
+# Windows is supported through WSL2 (linux-64).
+#
+# Rules:
+# - conda-forge for everything available there; PyPI only for packages that are
+#   missing or too old on conda-forge (pixi resolves them against the conda ones).
+# - Nothing here touches the user's base conda or ~/.condarc.
+# - Linux torch is pinned to the CUDA 12.9 builds: they include sm_50..sm_120
+#   (Pascal through Blackwell). The CUDA 13 builds drop Pascal/Volta, and the
+#   solver would pick them on a recent driver.
+
 [workspace]
 authors = ["Luigi Freda <luigifreda@gmail.com>"]
 channels = ["conda-forge"]
-name = "pyslam-pixi"
-platforms = ["linux-64"]
+name = "pyslam"
+platforms = [
+  "linux-64",
+  { name = "osx-arm64-14", platform = "osx-arm64", macos = "14.0" },  # Qt 6 (opencv, pyside6, open3d) needs macOS >= 14
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
 version = "2.10.7"
-preview = ["pixi-build"]
 
+[activation.env]
+# Keep ~/.local/lib/pythonX.Y/site-packages out of the environment
+PYTHONNOUSERSITE = "1"
+# conda-forge torch brings LLVM OpenMP (libgomp is a link to libomp). Its idle worker
+# threads spin for 200 ms by default, which starves pySLAM's threads: tracking was 4 to
+# 14 times slower and lost track. pyslam/__init__.py sets this too; here it also covers
+# tools that do not import pyslam first.
+KMP_BLOCKTIME = "0"
+
+# ---------------------------------------------------------------------------
+# base: the Python runtime pySLAM's own modules import (shared by every env,
+# including the tf worker env)
+# ---------------------------------------------------------------------------
 [dependencies]
-python = "==3.11.9"
-pip = ">=25.1.1,<26"
-absl-py = "*"
-astor = "*"
-cycler = "*"
-decorator = "*"
-gast = "*"
-google-pasta = "*"
-grpcio = "*"
-h5py = "*"
-imageio = "*"
-keras = "*"
-kiwisolver = "*"
-markdown = "*"
+python = "3.11.*"
+pip = "*"
+numpy = ">=1.26,<2"
+opencv = ">=4.12,<5"
+scipy = ">=1.15.2,<2"
 matplotlib = "*"
-networkx = "*"
-ordered-set = "*"
-pillow = "*"
+pyyaml = "*"
+ujson = "*"
+termcolor = "*"
+tqdm = "*"
 psutil = "*"
-pybind11 = "*"
-eigen = "==5.0.1"
-pygame = "*"
+pillow = "*"
+h5py = "*"
+munch = "*"
+configargparse = "*"
+ordered-set = "*"
+requests = "*"
+gdown = "*"
+mcap = "*"
+
+[target.linux-64.dependencies]
+# Whatever pulls in CUDA (torch, faiss, tensorflow) uses the CUDA 12.9 builds,
+# which still support Pascal/Volta GPUs
+cuda-version = "12.9.*"
+
+# ---------------------------------------------------------------------------
+# build: toolchain and C++ libraries to build pySLAM's native modules
+# ---------------------------------------------------------------------------
+[feature.build.dependencies]
 compilers = "*"
 cmake = "<4"
 ninja = "*"
-pyopengl = "*"
-pyopenssl = "*"
-pyparsing = "*"
-python-dateutil = "*"
-pyyaml = "*"
-scipy = ">=1.15.2,<2"
-scikit-image = ">=0.25.2,<0.26"
-seaborn = ">=0.13.2,<0.14"
-six = "*"
-sklearn-pandas = "*"
-termcolor = "*"
-tqdm = "*"
-werkzeug = "*"
-wrapt = "*"
-yacs = "*"
-wget = "*"
-doxygen = "*"
-glew = "*"
 pkg-config = "*"
-suitesparse = "*"
-zlib = "*"
-bzip2 = "*"
-rsync = "*"
-readline = "*"
+make = "*"
+eigen = "==5.0.1"
 libboost-devel = "*"
+suitesparse = "*"
+metis = "*"
+tbb = "*"
+tbb-devel = "*"
 flann = "*"
-catch2 = "*"
-gdown = "*"
-x265 = "*"
-libheif = "*"
-gtk2 = "*"
-hdf5 = "*"
-tmux = "*"
-nano = "*"
-wheel = "*"
-pytorch-gpu = "*"
-torchvision = "*"
-ujson = ">=5.10.0,<6"
-einops = ">=0.8.1,<0.9"
-pyflann = "*"
-faiss = "*"
-trimesh = "*"
-jax = "*"
-munch = "*"
-wandb = "*"
-plyfile = "*"
-torchmetrics = "*"
-pyglm = "*"
-lpips = "*"
-rich = "*"
-ruff = "*"
-gradio = "*"
-pytorch3d = "*"
+glew = "*"
+spdlog = "*"
+qhull = "*"
+qhull-static = "*"  # libqhullcpp for cpp/volumetric (replaces scripts/install_qhull.sh)
+nlohmann_json = "*"  # replaces scripts/install_json_nlohmann.sh
+pyparsing = ">=3.2.5"
+pybind11-stubgen = ">=2.5.1"
+libopencv = ">=4.12,<5"
+
+[feature.build.target.linux-64.dependencies]
+# `compilers` 2.x no longer pulls these in. Their activation scripts set CC, CXX,
+# CFLAGS and CMAKE_PREFIX_PATH, so CMake uses the environment's libraries, not /usr
+gcc_linux-64 = "*"
+gxx_linux-64 = "*"
 libgl-devel = "*"
 libopengl-devel = "*"
 libegl-devel = "*"
 libglx-devel = "*"
-libgl = ">=1.7.0,<2"
-libopengl = ">=1.7.0,<2"
-libglu = ">=9.0.3,<10"
-#
-cython = "0.29.*"
-#
-cuda-compiler = "12.8.*"
-cuda-toolkit = "12.8.*"
-cudnn = "9.*"
-#
-metis = "*"
-rerun-sdk = "*"
-rattler-build = "*"
-fast-pytorch-kmeans = "*"
-timm = "*"
-pillow-heif = "*"
-evo = "*"
-quaternion = "*"
+libglu = "*"
+
+# ---------------------------------------------------------------------------
+# slam: classic SLAM runtime (loop-closure databases, viewers, evaluation)
+# ---------------------------------------------------------------------------
+[feature.slam.dependencies]
 open3d = "*"
-gtsam = "*"
-tbb = ">=2021.13.0,<2022"
-tbb-devel = ">=2021.13.0,<2022"
+filament = "<1.77.2"  # 1.77.2 broke the ABI that open3d 0.20 uses (Material::Builder::package)
+# gtsam: built from source (scripts/install_gtsam.sh, 4.3.0 with the bundled pybind11 3.0.4).
+# conda-forge gtsam 4.3.0 uses pybind11 3.1 (internals v12), which cannot share types with our modules.
+faiss = { version = "*", build = "*cpu*" }  # GPU faiss was opt-in (FAISS_GPU=1); keeps CUDA out of core
+# pyflann: pyproject.toml asks for PyPI's pyflann-py3, which installs the same module as conda's
+# pyflann; only one of them may be installed
+quaternion = "*"
+scikit-image = ">=0.25.2,<0.26"
+seaborn = "*"
+networkx = "*"
 pyqtgraph = "*"
 pyside6 = "*"
-onnxruntime = { version = "*", build = "*cpu*" }
+pyopengl = "*"
+pygame = "*"
+glfw = "*"
+pyglm = "*"
+rerun-sdk = ">=0.23,<0.23.2"  # needs set_time/Scalars (0.23); 0.23.2+ declares numpy >= 2
 viser = "*"
-vtk = ">=9.3.1,<10"
-ffmpeg = ">=7.1.1,<8"
-jinja2 = ">=3.1.6,<4"
-glib = "*"
-gobject-introspection = "*"
-spdlog = "*"
-console_bridge = "*"
-tinyxml2 = "*"
-configargparse = "*"
-python-devtools = ">=0.12.2,<0.13"
-imgviz = "==1.2.6"  # conda-forge: PyPI only has an sdist, which cannot be built when solving for linux-64 from another platform
+imgviz = "==1.2.6"
+scikit-learn = "*"  # Patch-NetVLAD (place recognition, default level)
+trimesh = "*"
+plyfile = "*"
+
+# ---------------------------------------------------------------------------
+# torch: deep learning stack shared by the learned components
+# ---------------------------------------------------------------------------
+[feature.torch.dependencies]
+pytorch = ">=2.9"
+torchvision = "*"
+kornia = "0.8.*"
+timm = "*"
+einops = "*"
+onnxruntime = { version = "*", build = "*cpu*" }
+tensorboard = "*"
+torchmetrics = "*"
+numba = "*"
 
 [pypi-dependencies]
-tensorboard = "*"
-numba = "*"
-glfw = "*"
+hjson = "*"
+mcap-ros2-support = "*"  # not on conda-forge
+mcap-ros1-support = "*"  # not on conda-forge
+
+[feature.slam.pypi-dependencies]
+evo = "*"  # conda-forge evo does not solve with gtsam/open3d on osx-arm64
+
+[feature.torch.pypi-dependencies]
+# pySLAM itself, editable. Its core dependencies (pyproject.toml) are satisfied by the conda packages
+# of the default level; the tf environment does not install it.
+pyslam = { path = ".", editable = true }
+kornia_moons = ">=0.2.9"
 roma = "*"
-kornia = "==0.8.2"
-kornia_moons = "==0.2.9"
-#transformers = "==4.38.2" 
-#f3rm = "*"                # conflict 
-#timm = "==1.0.15"         # conflict 
-#tensorflow = "==2.13"     # conflict 
-#tensorflow-hub = "*"      # conflict 
-#protobuf = ">=3.20"       # conflict 
+fast-pytorch-kmeans = "*"
 
+[feature.cuda]
+platforms = ["linux-64-cuda", "osx-arm64-14"]
 
-[system-requirements]
-cuda = "12.8"
+[feature.cuda.target.linux-64.dependencies]
+pytorch = { version = "*", build = "*cuda*" }
+# nvcc for the CUDA extensions built in-tree (simple-knn,
+# diff-gaussian-rasterization, lietorch, curope)
+cuda-nvcc = "*"
+cuda-cudart-dev = "*"
+cuda-libraries-dev = "*"
+
+# CPU-only torch on Linux
+[feature.cpu]
+platforms = ["linux-64"]
+
+[feature.cpu.target.linux-64.dependencies]
+pytorch = { version = "*", build = "*cpu*" }
+
+# ---------------------------------------------------------------------------
+# (i.a) depth and stereo inference (Depth Anything v2/v3, Depth Pro,
+# RAFT-Stereo, CREStereo)
+# ---------------------------------------------------------------------------
+[feature.depth.dependencies]
+pillow-heif = "*"
+gradio = "5.*"  # gradio 6 needs huggingface-hub >= 1, transformers 4.x needs < 1
+opt_einsum = "*"       # RAFT-Stereo
+omegaconf = "*"        # Depth Anything V3 (imported from thirdparty/depth_anything_v3/src)
+addict = "*"
+huggingface_hub = "*"
+safetensors = "*"
+moviepy = "*"
+
+# pycolmap (the COLMAP exports and demos of Depth Anything V3, MASt3R and VGGT).
+# - From PyPI: conda-forge only has pycolmap 0.4 (colmap 3.8), which forces OpenCV, torch and Open3D
+#   back to older versions.
+# - Linux only: the macOS wheel bundles its own OpenMP runtime (libomp), and with a second libomp
+#   next to the environment's one the process aborts ("OMP: Error #15") as soon as torch and pycolmap
+#   are both imported, which LightGlue does. pySLAM itself does not need pycolmap.
+[feature.depth.target.linux-64.pypi-dependencies]
+pycolmap = "*"
+
+# ---------------------------------------------------------------------------
+# (ii) semantic segmentation and object detection
+# ---------------------------------------------------------------------------
+[feature.semantics.dependencies]
+transformers = ">=4.41.2,<5"  # RF-DETR (pinned commit) uses backbone utilities removed in transformers 5
+ultralytics = "*"
+open-clip-torch = "*"
+openai-clip = "*"          # Detic
+peft = "*"                 # RF-DETR
+diffdist = "*"             # ODISE
+pytorch-lightning = "*"    # ODISE (the ldm module of stable-diffusion-sdkit)
+submitit = "*"
+detectron2 = "*"
+fvcore = "*"
+iopath = "*"
+pycocotools = "*"
+shapely = "*"
+ftfy = "*"
+regex = "*"
+nltk = "*"
+lvis = "*"
+fasttext = "*"
+fpsample = "*"
+supervision = "*"
+
+[feature.semantics.pypi-dependencies]
+# not on conda-forge
+panopticapi = { git = "https://github.com/cocodataset/panopticapi.git" }
+
+# ---------------------------------------------------------------------------
+# (iv) 3D representations (Gaussian splatting, 3R models, TSDF/voxel)
+# ---------------------------------------------------------------------------
+[feature.recon3d.dependencies]
+pyglfw = "*"  # Python binding of GLFW (the conda package `glfw` is the C library): MonoGS GUI
+rootutils = "*"  # Fast3R
+torchinfo = "*"
+plotly = "*"
+# pytorch3d: optional (mvdust3r); conda-forge builds need pytorch 2.13, detectron2 needs <=2.12
+hydra-core = "*"
+lightning = "*"
+lpips = "*"
+wandb = "*"
+
+# ---------------------------------------------------------------------------
+# tf: TensorFlow features (contextdesc, delf, geodesc, lfnet, l2net_keras,
+# keynet_old) and HDC-DELF; own env, used through a worker process
+# ---------------------------------------------------------------------------
+[feature.tf.dependencies]
+tensorflow = "*"
+tensorflow-hub = "*"
+tf-keras = "*"
+
+[feature.tf.pypi-dependencies]
+tf-slim = "==1.1.0"
+
+# ---------------------------------------------------------------------------
+# dev tools
+# ---------------------------------------------------------------------------
+[feature.dev.dependencies]
+ruff = "*"
+pytest = "*"
+rich = "*"
+
+# ---------------------------------------------------------------------------
+# Tasks: `pixi run <task>` (default level) or `pixi run -e <level> <task>`
+# ---------------------------------------------------------------------------
+[tasks]
+# Build the native modules in the source tree. One build serves every level of a ladder.
+build-gtsam = "bash scripts/install_gtsam.sh"  # GTSAM 4.3.0 + gtsam_factors
+build-orbslam2-features = { cmd = "./build.sh", cwd = "thirdparty/orbslam2_features" }
+build-pangolin = { cmd = "./build.sh", cwd = "thirdparty/pangolin" }
+build-g2o = { cmd = "./build.sh", cwd = "thirdparty/g2opy" }
+build-dbow3 = { cmd = "./build.sh", cwd = "thirdparty/pydbow3" }
+build-dbow2 = { cmd = "./build.sh", cwd = "thirdparty/pydbow2" }
+build-ibow = { cmd = "./build.sh", cwd = "thirdparty/pyibow" }
+build-cpp-utils = { cmd = "./build.sh", cwd = "cpp" }
+build-cpp-core = { cmd = "./build_cpp_core.sh", depends-on = ["build-gtsam", "build-g2o"] }
+# The ORB vocabulary of the default loop detector (about 100 MB), so that the first SLAM run
+# does not have to download it
+vocabulary = "python scripts/download_vocabulary.py"
+build = { cmd = "python scripts/check_pybind11_abi.py && python scripts/download_vocabulary.py", depends-on = [
+  "build-gtsam",
+  "build-orbslam2-features",
+  "build-pangolin",
+  "build-g2o",
+  "build-dbow3",
+  "build-dbow2",
+  "build-ibow",
+  "build-cpp-utils",
+  "build-cpp-core",
+] }
+# Learned features and place recognition (group i): submodules, patches, model weights, check
+models = "bash scripts/install_extra.sh features vpr"
+# Check the installation
+check-abi = "python scripts/check_pybind11_abi.py"
+check-gtsam = "python -m pytest -q test/gtsam/test_gtsam_factors_jacobians.py test/gtsam/test_optimize_pose.py test/gtsam/test_optimize_sim3.py"
+check-g2o = "python -m pytest -q test/g2o/test_optimize_pose.py test/g2o/test_optimize_sim3.py"
+check = { depends-on = ["check-abi", "check-gtsam", "check-g2o"] }
+
+# default level: the main scripts (extra arguments are passed on, e.g. `pixi run slam --headless`)
+vo = "python main_vo.py"
+slam = "python main_slam.py"
+feature-matching = "python main_feature_matching.py"
+map-viewer = "python main_map_viewer.py"
+slam-evaluation = "python main_slam_evaluation.py"
+dense-reconstruction = "python main_map_dense_reconstruction.py"
+
+[feature.depth.tasks]
+# Depth and stereo models (group i.a): clone, patch, download the weights, check each one
+models-depth = "bash scripts/install_extra.sh depth"
+depth-prediction = "python main_depth_prediction.py"
+
+[feature.semantics.tasks]
+# Segmentation and detection models (group ii): clone, patch, download the weights, check each one
+models-semantics = "bash scripts/install_extra.sh semantics"
+semantic-segmentation = "python main_semantic_image_segmentation.py"
+
+[feature.recon3d.tasks]
+# 3R models and Gaussian splatting (group iv): clone, patch, build the CUDA extensions, download the
+# weights, check each one. Needs an NVIDIA GPU.
+models-scene3d = "bash scripts/install_extra.sh scene3d"
+scene-from-views = "python main_scene_from_views.py"
+
+[environments]
+# A ladder: each level includes the ones below it. All levels of a ladder share one
+# solve group, so they have identical Python, OpenCV, Boost, torch, ... and the native
+# modules built in the source tree serve every level.
+#
+# GPU ladder: CUDA 12.9 on Linux with NVIDIA, MPS on macOS
+default   = { features = ["build", "slam", "torch", "cuda", "dev"], solve-group = "gpu" }
+depth     = { features = ["build", "slam", "torch", "cuda", "depth", "dev"], solve-group = "gpu" }
+semantics = { features = ["build", "slam", "torch", "cuda", "depth", "semantics", "dev"], solve-group = "gpu" }
+full      = { features = ["build", "slam", "torch", "cuda", "depth", "semantics", "recon3d", "dev"], solve-group = "gpu" }
+# CPU ladder: Linux without an NVIDIA GPU
+default-cpu   = { features = ["build", "slam", "torch", "cpu", "dev"], solve-group = "cpu" }
+depth-cpu     = { features = ["build", "slam", "torch", "cpu", "depth", "dev"], solve-group = "cpu" }
+semantics-cpu = { features = ["build", "slam", "torch", "cpu", "depth", "semantics", "dev"], solve-group = "cpu" }
+full-cpu      = { features = ["build", "slam", "torch", "cpu", "depth", "semantics", "recon3d", "dev"], solve-group = "cpu" }
+# TensorFlow features, used through a worker process
+tf = { features = ["tf"] }

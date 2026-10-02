@@ -793,6 +793,54 @@ index cb281c9..dfeee47 100644
      def _load_model(self, checkpoint):
          # rename the keys in checkpoint
          checkpoint["model"] = checkpoint.pop("state_dict")
+diff --git a/odise/modeling/meta_arch/clip.py b/odise/modeling/meta_arch/clip.py
+index 06dfa17..2bd6651 100644
+--- a/odise/modeling/meta_arch/clip.py
++++ b/odise/modeling/meta_arch/clip.py
+@@ -26,6 +26,16 @@ EmbeddedText = namedtuple("EmbedTextReturn", ["text_embed", "text_encodings", "t
+ EmbeddedImage = namedtuple("EmbedImageReturn", ["image_embed", "image_encodings"])
+ 
+ 
++def _run_transformer_lnd(transformer, x, attn_mask=None):
++    """Run an open_clip transformer on x in [L, N, D] layout.
++
++    Newer open_clip transformers are batch-first ([N, L, D]); older ones take [L, N, D].
++    """
++    if getattr(transformer, "batch_first", False):
++        return transformer(x.permute(1, 0, 2), attn_mask=attn_mask).permute(1, 0, 2)
++    return transformer(x, attn_mask=attn_mask)
++
++
+ def build_clip_text_embed(clip_model_name, labels, device="cuda", verbose=True):
+     if isinstance(clip_model_name, str):
+         clip, _, _ = open_clip.create_model_and_transforms(
+@@ -149,7 +159,7 @@ class ClipAdapter(nn.Module):
+         x = self.clip.token_embedding(text)  # [batch_size, n_ctx, d_model]
+         x = x + self.clip.positional_embedding
+         x = x.permute(1, 0, 2)  # NLD -> LND
+-        x = self.clip.transformer(x, attn_mask=self.clip.attn_mask)
++        x = _run_transformer_lnd(self.clip.transformer, x, self.clip.attn_mask)
+         x = x.permute(1, 0, 2)  # LND -> NLD
+         x = self.clip.ln_final(x)
+         text_encodings = x
+@@ -191,7 +201,7 @@ class ClipAdapter(nn.Module):
+             x = self.clip.visual.ln_pre(x)
+ 
+             x = x.permute(1, 0, 2)  # NLD -> LND
+-            x = self.clip.visual.transformer(x)
++            x = _run_transformer_lnd(self.clip.visual.transformer, x)
+             x = x.permute(1, 0, 2)  # LND -> NLD
+ 
+             # [batch_size, num_patches+1, transformer.width]
+@@ -268,7 +278,7 @@ class MaskCLIP(ClipAdapter):
+         cls_embed = x[0:1]
+         cls_embed = cls_embed.expand(num_mask_tokens, -1, -1)
+         x = torch.cat([cls_embed, x], dim=0)
+-        x = self.clip.visual.transformer(x, attn_mask)
++        x = _run_transformer_lnd(self.clip.visual.transformer, x, attn_mask)
+         x = x.permute(1, 0, 2)  # LND -> NLD
+ 
+         # [N, L, D]
 diff --git a/run_demo.sh b/run_demo.sh
 new file mode 100755
 index 0000000..ffa210d

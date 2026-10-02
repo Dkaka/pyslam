@@ -2,8 +2,9 @@
 
 > **Draft.** This is the short installation path for the course. It installs the **core** of pySLAM
 > (visual odometry, full SLAM with classical features, loop closing, g2o/GTSAM optimisation and the
-> viewers) and then **optional components on request**, week by week. The planned pixi-based setup
-> will replace steps 2–4 with a couple of commands; the rest of this page will stay.
+> viewers) and then **optional components on request**, week by week. A pixi-based setup that
+> replaces steps 3–6 with a few commands is described in [PIXI.md](./PIXI.md); it has been tested
+> on Linux with an NVIDIA GPU so far.
 >
 > Do **not** run `./install_all.sh` for the course: it installs every optional component at once
 > (over 1.5 hours and many GB of downloads).

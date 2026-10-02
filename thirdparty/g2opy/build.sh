@@ -36,7 +36,7 @@ if [[ -n "$PIXI_PROJECT_NAME" ]]; then
     PIXI_ACTIVATED=true
     echo "Pixi environment detected: $PIXI_PROJECT_NAME"
 
-    source "$SCRIPTS_DIR/pixi_python_config.sh"
+    source "$SCRIPT_DIR/../../scripts/pixi_python_config.sh"
 else
     PIXI_ACTIVATED=false
 fi
@@ -57,7 +57,7 @@ PIXI_ENV_PREFIX=""
 if [[ "$PYTHON_EXE" == *".pixi"* ]]; then
     # Extract pixi environment prefix from Python path
     # e.g., /path/to/project/.pixi/envs/default/bin/python3 -> /path/to/project/.pixi/envs/default
-    PIXI_ENV_PREFIX=$(dirname $(dirname $(dirname "$PYTHON_EXE")))
+    PIXI_ENV_PREFIX=$(dirname $(dirname "$PYTHON_EXE"))
     echo "Detected pixi environment at: $PIXI_ENV_PREFIX"
 fi
 

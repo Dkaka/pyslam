@@ -1,5 +1,5 @@
 diff --git a/models/croco.py b/models/croco.py
-index 14c6863..4aeb4d1 100644
+index a4f6fe7..85716c6 100644
 --- a/models/croco.py
 +++ b/models/croco.py
 @@ -13,9 +13,9 @@ import torch.nn as nn
@@ -15,24 +15,6 @@ index 14c6863..4aeb4d1 100644
  
  
  class CroCoNet(nn.Module):
-diff --git a/models/curope/kernels.cu b/models/curope/kernels.cu
-index 7156cd1..67cff1e 100644
---- a/models/curope/kernels.cu
-+++ b/models/curope/kernels.cu
-@@ -98,11 +98,11 @@ void rope_2d_cuda( torch::Tensor tokens, const torch::Tensor pos, const float ba
-     const int N_BLOCKS = B * N; // each block takes care of H*D values
-     const int SHARED_MEM = sizeof(float) * (D + D/4);
- 
--    AT_DISPATCH_FLOATING_TYPES_AND_HALF(tokens.type(), "rope_2d_cuda", ([&] {
-+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(tokens.scalar_type(), "rope_2d_cuda", [&] {
-         rope_2d_cuda_kernel<scalar_t> <<<N_BLOCKS, THREADS_PER_BLOCK, SHARED_MEM>>> (
-             //tokens.data_ptr<scalar_t>(), 
-             tokens.packed_accessor32<scalar_t,4,torch::RestrictPtrTraits>(),
-             pos.data_ptr<int64_t>(), 
-             base, fwd); //, N, H, D );
--    }));
-+    });
- }
 diff --git a/models/curope/setup.py b/models/curope/setup.py
 index 230632e..d942ffa 100644
 --- a/models/curope/setup.py

@@ -2554,7 +2554,7 @@ index ed8c5d3..2902c11 100644
 \ No newline at end of file
 +    get_coco_stuff_categories_with_prompt_eng()
 diff --git a/eov_seg/modeling/backbone/clip.py b/eov_seg/modeling/backbone/clip.py
-index e019e51..519842e 100644
+index e019e51..ca8cd57 100644
 --- a/eov_seg/modeling/backbone/clip.py
 +++ b/eov_seg/modeling/backbone/clip.py
 @@ -1,18 +1,19 @@
@@ -2663,30 +2663,28 @@ index e019e51..519842e 100644
              }
          elif backbone_type == "vit":
              self._out_feature_strides = {
-@@ -115,7 +118,9 @@ class CLIP(Backbone):
+@@ -113,78 +116,88 @@ class CLIP(Backbone):
+             param.requires_grad = False
+ 
      def encode_text(self, text, normalize: bool = False):
-         cast_dtype = self.clip_model.transformer.get_cast_dtype()
- 
+-        cast_dtype = self.clip_model.transformer.get_cast_dtype()
+-
 -        x = self.clip_model.token_embedding(text).to(cast_dtype)  # [batch_size, n_ctx, d_model]
-+        x = self.clip_model.token_embedding(text).to(
-+            cast_dtype
-+        )  # [batch_size, n_ctx, d_model]
- 
-         x = x + self.clip_model.positional_embedding.to(cast_dtype)
-         x = x.permute(1, 0, 2)  # NLD -> LND
-@@ -123,7 +128,10 @@ class CLIP(Backbone):
-         x = x.permute(1, 0, 2)  # LND -> NLD
-         x = self.clip_model.ln_final(x)  # [batch_size, n_ctx, transformer.width]
-         # take features from the eot embedding (eot_token is the highest number in each sequence)
+-
+-        x = x + self.clip_model.positional_embedding.to(cast_dtype)
+-        x = x.permute(1, 0, 2)  # NLD -> LND
+-        x = self.clip_model.transformer(x, attn_mask=self.clip_model.attn_mask)
+-        x = x.permute(1, 0, 2)  # LND -> NLD
+-        x = self.clip_model.ln_final(x)  # [batch_size, n_ctx, transformer.width]
+-        # take features from the eot embedding (eot_token is the highest number in each sequence)
 -        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.clip_model.text_projection
-+        x = (
-+            x[torch.arange(x.shape[0]), text.argmax(dim=-1)]
-+            @ self.clip_model.text_projection
-+        )
-         return F.normalize(x, dim=-1) if normalize else x
+-        return F.normalize(x, dim=-1) if normalize else x
++        # Use open_clip's own text encoder: it is the same computation, and it follows the
++        # transformer's tensor layout, which changed to batch-first in newer open_clip versions.
++        return self.clip_model.encode_text(text, normalize=normalize)
  
      def tokenize_text(self, text):
-@@ -131,60 +139,79 @@ class CLIP(Backbone):
+         return self.text_tokenizer(text)
  
      def extract_features(self, x):
          return {
@@ -2786,7 +2784,7 @@ index e019e51..519842e 100644
              out_proj_weight=self.clip_model.visual.attnpool.c_proj.weight,
              out_proj_bias=self.clip_model.visual.attnpool.c_proj.bias,
              use_separate_proj_weight=True,
-@@ -196,29 +223,43 @@ class CLIP(Backbone):
+@@ -196,29 +209,43 @@ class CLIP(Backbone):
  
      def extract_features_resnet(self, x):
          out = {}
@@ -2841,7 +2839,7 @@ index e019e51..519842e 100644
  
          B, N, C = x.shape
          positional_embedding = self.clip_model.visual.positional_embedding.to(x.dtype)
-@@ -226,10 +267,16 @@ class CLIP(Backbone):
+@@ -226,10 +253,16 @@ class CLIP(Backbone):
          class_pos_embed = positional_embedding[:1, None, :]  # 1 x 1 x C
          orig_size = int(math.sqrt(spatial_pos_embed.shape[0]))
          # new_size = int(math.sqrt(x[:, 1:, :].shape[1]))
@@ -2861,7 +2859,7 @@ index e019e51..519842e 100644
          x = x + spatial_pos_embed  # B(HW)C
  
          x = self.clip_model.visual.ln_pre(x)
-@@ -244,59 +291,85 @@ class CLIP(Backbone):
+@@ -244,59 +277,85 @@ class CLIP(Backbone):
  
      def visual_prediction_forward_convnext(self, x, masks):
          batch, num_query, channel = x.shape
@@ -2966,7 +2964,7 @@ index e019e51..519842e 100644
          return x
  
      def get_text_classifier(self, text_list, device):
-@@ -313,23 +386,25 @@ class CLIP(Backbone):
+@@ -313,23 +372,25 @@ class CLIP(Backbone):
          self.eval()
          with torch.no_grad():
              return self.extract_features(x)
@@ -2996,7 +2994,7 @@ index e019e51..519842e 100644
                  )
                  for name in ["layer"]
              }
-@@ -343,7 +418,9 @@ class CLIP(Backbone):
+@@ -343,7 +404,9 @@ class CLIP(Backbone):
  
      def get_similarity_map(sm, shape):
          # min-max norm
@@ -3007,7 +3005,7 @@ index e019e51..519842e 100644
  
          # reshape
          if len(sm) == 3:
-@@ -351,7 +428,7 @@ class CLIP(Backbone):
+@@ -351,7 +414,7 @@ class CLIP(Backbone):
              sm = sm.reshape(sm.shape[0], side, side, -1).permute(0, 3, 1, 2)
  
          # interpolate

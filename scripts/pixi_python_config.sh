@@ -29,10 +29,13 @@ SCRIPT_DIR_=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 SCRIPT_DIR_=$(readlink -f "$SCRIPT_DIR_")  # this reads the actual path if a symbolic directory is used
 ROOT_DIR="$SCRIPT_DIR_/.."
 
+# The active pixi environment (pixi sets CONDA_PREFIX to it), whatever its name
+PIXI_ENV_DIR="${CONDA_PREFIX:-$ROOT_DIR/.pixi/envs/default}"
+
 # Check if we're in a pixi environment
 if [ -z "$PIXI_ACTIVATED" ]; then
     # Try to detect pixi environment
-    if [ -d "$ROOT_DIR/.pixi/envs/default" ] || [ -d ".pixi/envs/default" ]; then
+    if [ -d "$PIXI_ENV_DIR" ]; then
         export PIXI_ACTIVATED=true
     else
         # Not in pixi environment, exit silently
@@ -44,10 +47,8 @@ fi
 if [ "$PIXI_ACTIVATED" = true ]; then
     # Try to find pixi's Python directly
     PIXI_PYTHON=""
-    if [ -f "$ROOT_DIR/.pixi/envs/default/bin/python" ]; then
-        PIXI_PYTHON="$ROOT_DIR/.pixi/envs/default/bin/python"
-    elif [ -f ".pixi/envs/default/bin/python" ]; then
-        PIXI_PYTHON=".pixi/envs/default/bin/python"
+    if [ -f "$PIXI_ENV_DIR/bin/python" ]; then
+        PIXI_PYTHON="$PIXI_ENV_DIR/bin/python"
     elif command -v pixi &> /dev/null; then
         # Use pixi run to get the correct Python
         # Note: This is a command string, not a direct path
