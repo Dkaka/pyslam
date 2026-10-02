@@ -87,7 +87,11 @@ kVerbose = True
 kTimerVerbose = False  # set this to True if you want to print timings
 kPrintTrackebackDetails = True
 
-kUseCv2ForDrawing = platform.system() != "Darwin"  # under mac we can't use cv2 imshow here
+# The debug windows of loop closing are drawn by QimageViewer, a separate process, on every platform.
+# With OpenCV's imshow (Linux only: macOS cannot use it from this thread) the windows live in the
+# main process: once they open at start-up, the viewer processes forked after them took 6-15 s each
+# to stop on quit (they inherit the main process's GUI state).
+kUseCv2ForDrawing = False
 
 kScriptPath = os.path.realpath(__file__)
 kScriptFolder = os.path.dirname(kScriptPath)
@@ -372,7 +376,7 @@ class LoopGeometryChecker:
                         )
 
                         # draw loop image matching for debug
-                        if Parameters.kLoopClosingDebugShowLoopMatchedPoints and kUseCv2ForDrawing:
+                        if Parameters.kLoopClosingDebugShowLoopMatchedPoints:
                             try:
                                 cur_kf_img = (
                                     current_keyframe.img
@@ -391,9 +395,13 @@ class LoopGeometryChecker:
                                     kf.kps[idxs2],
                                     horizontal=False,
                                 )
-                                # cv2.namedWindow('loop_img_matches', cv2.WINDOW_NORMAL)
-                                cv2.imshow("loop_img_matches", loop_img_matches)
-                                cv2.waitKey(1)
+                                if kUseCv2ForDrawing:
+                                    cv2.imshow("loop_img_matches", loop_img_matches)
+                                    cv2.waitKey(1)
+                                else:
+                                    QimageViewer.get_instance().draw(
+                                        loop_img_matches, "loop closing: matched points"
+                                    )
                             except Exception as e:
                                 LoopClosing.print(
                                     f"LoopGeometryChecker: failure while drawing loop image matching failed: {e}"
