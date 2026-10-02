@@ -550,8 +550,7 @@ if __name__ == "__main__":
                 if playback_throttle.update(slam.tracking.kf_demand):
                     Printer.yellow(
                         f"Playback speed: {playback_throttle.speed_str()} "
-                        f"({100 * slam.tracking.kf_demand.suppressed_fraction():.0f}% of the recent keyframe "
-                        f"requests found local mapping busy)"
+                        f"(tracking was weak in {100 * playback_throttle.last_fraction:.0f}% of the recent frames)"
                     )
                 processing_duration = time.time() - time_start
                 delta_time_sleep = (
@@ -623,6 +622,9 @@ if __name__ == "__main__":
             f.write(f"playback_lowest_speed: {playback_throttle.speed_str(playback_throttle.lowest_speed)}\n")
             f.write(f"playback_num_slowdowns: {playback_throttle.num_decreases}\n")
             f.write(
+                f"percent_weak_tracking_frames: {slam.tracking.kf_demand.total_weak_fraction()*100:.2f}\n"
+            )
+            f.write(
                 f"percent_suppressed_keyframe_requests: {slam.tracking.kf_demand.total_suppressed_fraction()*100:.2f}\n"
             )
 
@@ -636,6 +638,7 @@ if __name__ == "__main__":
         f"Playback: max speed {playback_throttle.speed_str(playback_throttle.max_speed)}, "
         f"lowest speed {playback_throttle.speed_str(playback_throttle.lowest_speed)}, "
         f"{playback_throttle.num_decreases} slow-downs; "
+        f"tracking was weak in {slam.tracking.kf_demand.total_weak_fraction()*100:.0f}% of the frames; "
         f"{slam.tracking.kf_demand.total_suppressed_fraction()*100:.0f}% of the keyframe requests "
         f"found local mapping busy",
         flush=True,
