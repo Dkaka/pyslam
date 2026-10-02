@@ -364,7 +364,7 @@ class FeatureManager:
             #
         elif self.detector_type == FeatureDetectorTypes.ORB2:
             orb2_num_levels = self.num_levels
-            deterministic = kwargs.get("deterministic", False)
+            deterministic = kwargs.get("deterministic", True)  # see FeatureTrackerConfigs.ORB2
             self._feature_detector = Orbslam2Feature2D(
                 self.num_features, self.scale_factor, orb2_num_levels, deterministic
             )

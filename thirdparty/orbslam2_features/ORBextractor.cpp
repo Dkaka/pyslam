@@ -78,6 +78,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <vector>
+#include <tuple>
 
 #include "ORBextractor.h"
 
@@ -809,9 +810,22 @@ ORBextractor<IsDeterministic>::DistributeOctTree(const vector<cv::KeyPoint> &vTo
         float maxResponse = pKP->response;
 
         for (size_t k = 1; k < vNodeKeys.size(); k++) {
-            if (vNodeKeys[k].response > maxResponse) {
+            const cv::KeyPoint &kp = vNodeKeys[k];
+            bool better = kp.response > maxResponse;
+            if constexpr (IsDeterministic) {
+                // Equal responses are common (FAST's are integers): the first one in the input
+                // would win, and the input order is not fixed when the keypoints come from several
+                // threads (e.g. pySLAM's pyramid adaptor, before octree_nms). Break ties by position,
+                // then octave and size (several pyramid levels can give the same point).
+                if (!better && kp.response == maxResponse) {
+                    const cv::KeyPoint &b = *pKP;
+                    better = std::tie(kp.pt.y, kp.pt.x, kp.octave, kp.size) <
+                             std::tie(b.pt.y, b.pt.x, b.octave, b.size);
+                }
+            }
+            if (better) {
                 pKP = &vNodeKeys[k];
-                maxResponse = vNodeKeys[k].response;
+                maxResponse = kp.response;
             }
         }
 

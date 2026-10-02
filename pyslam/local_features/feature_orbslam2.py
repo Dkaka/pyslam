@@ -32,7 +32,7 @@ kVerbose = True
 
 # Interface for pySLAM
 class Orbslam2Feature2D(BaseFeature2D):
-    def __init__(self, num_features=2000, scale_factor=1.2, num_levels=8, deterministic=False):
+    def __init__(self, num_features=2000, scale_factor=1.2, num_levels=8, deterministic=True):
         print("Using Orbslam2Feature2D")
         if deterministic:
             self.orb_extractor = ORBextractorDeterministic(num_features, scale_factor, num_levels)
