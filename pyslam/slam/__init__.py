@@ -37,7 +37,11 @@ if USE_CPP:
     if CPP_AVAILABLE:
         from .cpp import cpp_module
 
-        print("✅ cpp_module imported successfully, C++ core is available")
+        from pyslam.utilities.system import is_main_process
+
+        # only in the main process: spawned worker processes import this module again (macOS)
+        if is_main_process():
+            print("✅ cpp_module imported successfully, C++ core is available")
         # Assign all classes from C++ module to global namespace
         for name, cls in cpp_module.classes.items():
             globals()[name] = cls
