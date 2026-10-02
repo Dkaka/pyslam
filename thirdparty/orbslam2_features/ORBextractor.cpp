@@ -654,71 +654,48 @@ ORBextractor<IsDeterministic>::DistributeOctTree(const vector<cv::KeyPoint> &vTo
                 ExtractorNode n1, n2, n3, n4;
                 lit->DivideNode(n1, n2, n3, n4);
 
-                if constexpr (IsDeterministic) {
-                    // Deterministic version for the second section
-                    vector<ExtractorNode> newNodes2;
-                    if (n1.vKeys.size() > 0)
-                        newNodes2.push_back(n1);
-                    if (n2.vKeys.size() > 0)
-                        newNodes2.push_back(n2);
-                    if (n3.vKeys.size() > 0)
-                        newNodes2.push_back(n3);
-                    if (n4.vKeys.size() > 0)
-                        newNodes2.push_back(n4);
-
-                    sort(newNodes2.begin(), newNodes2.end(),
-                         [](const ExtractorNode &a, const ExtractorNode &b) {
-                             return a.vKeys.size() > b.vKeys.size();
-                         });
-
-                    for (const auto &node : newNodes2) {
-                        lNodes.emplace_back(node);
-                        if (node.vKeys.size() > 1) {
-                            vSizeAndPointerToNode.emplace_back(node.vKeys.size(), &lNodes.back());
-                            lNodes.back().lit = --lNodes.end();
-                        }
+                // Same insertion for both variants (stock ORB-SLAM2): the children go to the
+                // front of the list, so this pass does not visit them again, and nToExpand counts
+                // the nodes that can still be split. Only the tie-break of the sort below differs.
+                // Add childs if they contain points
+                if (n1.vKeys.size() > 0) {
+                    // lNodes.push_front(n1);
+                    lNodes.emplace_front(n1);
+                    if (n1.vKeys.size() > 1) {
+                        nToExpand++;
+                        // vSizeAndPointerToNode.push_back(make_pair(n1.vKeys.size(),&lNodes.front()));
+                        vSizeAndPointerToNode.emplace_back(n1.vKeys.size(), &lNodes.front());
+                        lNodes.front().lit = lNodes.begin();
                     }
-                } else {
-                    // Add childs if they contain points
-                    if (n1.vKeys.size() > 0) {
-                        // lNodes.push_front(n1);
-                        lNodes.emplace_front(n1);
-                        if (n1.vKeys.size() > 1) {
-                            nToExpand++;
-                            // vSizeAndPointerToNode.push_back(make_pair(n1.vKeys.size(),&lNodes.front()));
-                            vSizeAndPointerToNode.emplace_back(n1.vKeys.size(), &lNodes.front());
-                            lNodes.front().lit = lNodes.begin();
-                        }
+                }
+                if (n2.vKeys.size() > 0) {
+                    // lNodes.push_front(n2);
+                    lNodes.emplace_front(n2);
+                    if (n2.vKeys.size() > 1) {
+                        nToExpand++;
+                        // vSizeAndPointerToNode.push_back(make_pair(n2.vKeys.size(),&lNodes.front()));
+                        vSizeAndPointerToNode.emplace_back(n2.vKeys.size(), &lNodes.front());
+                        lNodes.front().lit = lNodes.begin();
                     }
-                    if (n2.vKeys.size() > 0) {
-                        // lNodes.push_front(n2);
-                        lNodes.emplace_front(n2);
-                        if (n2.vKeys.size() > 1) {
-                            nToExpand++;
-                            // vSizeAndPointerToNode.push_back(make_pair(n2.vKeys.size(),&lNodes.front()));
-                            vSizeAndPointerToNode.emplace_back(n2.vKeys.size(), &lNodes.front());
-                            lNodes.front().lit = lNodes.begin();
-                        }
+                }
+                if (n3.vKeys.size() > 0) {
+                    // lNodes.push_front(n3);
+                    lNodes.emplace_front(n3);
+                    if (n3.vKeys.size() > 1) {
+                        nToExpand++;
+                        // vSizeAndPointerToNode.push_back(make_pair(n3.vKeys.size(),&lNodes.front()));
+                        vSizeAndPointerToNode.emplace_back(n3.vKeys.size(), &lNodes.front());
+                        lNodes.front().lit = lNodes.begin();
                     }
-                    if (n3.vKeys.size() > 0) {
-                        // lNodes.push_front(n3);
-                        lNodes.emplace_front(n3);
-                        if (n3.vKeys.size() > 1) {
-                            nToExpand++;
-                            // vSizeAndPointerToNode.push_back(make_pair(n3.vKeys.size(),&lNodes.front()));
-                            vSizeAndPointerToNode.emplace_back(n3.vKeys.size(), &lNodes.front());
-                            lNodes.front().lit = lNodes.begin();
-                        }
-                    }
-                    if (n4.vKeys.size() > 0) {
-                        // lNodes.push_front(n4);
-                        lNodes.emplace_front(n4);
-                        if (n4.vKeys.size() > 1) {
-                            nToExpand++;
-                            // vSizeAndPointerToNode.push_back(make_pair(n4.vKeys.size(),&lNodes.front()));
-                            vSizeAndPointerToNode.emplace_back(n4.vKeys.size(), &lNodes.front());
-                            lNodes.front().lit = lNodes.begin();
-                        }
+                }
+                if (n4.vKeys.size() > 0) {
+                    // lNodes.push_front(n4);
+                    lNodes.emplace_front(n4);
+                    if (n4.vKeys.size() > 1) {
+                        nToExpand++;
+                        // vSizeAndPointerToNode.push_back(make_pair(n4.vKeys.size(),&lNodes.front()));
+                        vSizeAndPointerToNode.emplace_back(n4.vKeys.size(), &lNodes.front());
+                        lNodes.front().lit = lNodes.begin();
                     }
                 }
 
@@ -733,87 +710,80 @@ ORBextractor<IsDeterministic>::DistributeOctTree(const vector<cv::KeyPoint> &vTo
             bFinish = true;
         } else if (((int)lNodes.size() + nToExpand * 3) > N) {
 
+            int tieRound = 0;
             while (!bFinish) {
 
+                ++tieRound;
                 prevSize = lNodes.size();
 
                 vector<pair<int, ExtractorNode *>> vPrevSizeAndPointerToNode =
                     vSizeAndPointerToNode;
                 vSizeAndPointerToNode.clear();
 
-                sort(vPrevSizeAndPointerToNode.begin(), vPrevSizeAndPointerToNode.end());
+                // The nodes are subdivided from the end of this array, largest first, until the
+                // budget N is reached. Stock ORB-SLAM2 sorts the (count, pointer) pairs, so nodes
+                // with EQUAL counts are ordered by their heap ADDRESS: which of them get subdivided,
+                // and so which keypoints survive, then changes from run to run (pySLAM's
+                // ORBextractor gave a different keypoint set on every repeated run of the same
+                // image). The deterministic variant breaks ties on the node's position instead,
+                // alternating the direction each round so that no image corner is favoured
+                // (from Refactored_ORB_SLAM2-PGA, EXP-341).
+                if constexpr (IsDeterministic) {
+                    sort(vPrevSizeAndPointerToNode.begin(), vPrevSizeAndPointerToNode.end(),
+                         [tieRound](const pair<int, ExtractorNode *> &a,
+                                    const pair<int, ExtractorNode *> &b) {
+                             if (a.first != b.first)
+                                 return a.first < b.first;
+                             const cv::Point2i &pa = a.second->UL, &pb = b.second->UL;
+                             const bool asc = (tieRound % 2) == 0;
+                             if (pa.x != pb.x)
+                                 return asc ? pa.x < pb.x : pa.x > pb.x;
+                             return asc ? pa.y < pb.y : pa.y > pb.y;
+                         });
+                } else {
+                    sort(vPrevSizeAndPointerToNode.begin(), vPrevSizeAndPointerToNode.end());
+                }
                 for (int j = vPrevSizeAndPointerToNode.size() - 1; j >= 0; j--) {
                     ExtractorNode n1, n2, n3, n4;
                     vPrevSizeAndPointerToNode[j].second->DivideNode(n1, n2, n3, n4);
 
                     // Add childs if they contain points
 
-                    if constexpr (IsDeterministic) {
-                        // Deterministic version: collect nodes first, then insert in sorted order
-                        vector<ExtractorNode> newNodes;
-                        if (n1.vKeys.size() > 0)
-                            newNodes.push_back(n1);
-                        if (n2.vKeys.size() > 0)
-                            newNodes.push_back(n2);
-                        if (n3.vKeys.size() > 0)
-                            newNodes.push_back(n3);
-                        if (n4.vKeys.size() > 0)
-                            newNodes.push_back(n4);
-
-                        // Sort by number of keypoints (descending) for deterministic processing
-                        sort(newNodes.begin(), newNodes.end(),
-                             [](const ExtractorNode &a, const ExtractorNode &b) {
-                                 return a.vKeys.size() > b.vKeys.size();
-                             });
-
-                        // Insert in deterministic order
-                        for (const auto &node : newNodes) {
-                            lNodes.emplace_back(node);
-                            if (node.vKeys.size() > 1) {
-                                nToExpand++;
-                                vSizeAndPointerToNode.emplace_back(node.vKeys.size(),
-                                                                   &lNodes.back());
-                                lNodes.back().lit = --lNodes.end();
-                            }
+                    // Original non-deterministic version: emplace_front for efficiency
+                    if (n1.vKeys.size() > 0) {
+                        lNodes.emplace_front(n1);
+                        if (n1.vKeys.size() > 1) {
+                            nToExpand++;
+                            vSizeAndPointerToNode.emplace_back(n1.vKeys.size(),
+                                                               &lNodes.front());
+                            lNodes.front().lit = lNodes.begin();
                         }
-                    } else {
-
-                        // Original non-deterministic version: emplace_front for efficiency
-                        if (n1.vKeys.size() > 0) {
-                            lNodes.emplace_front(n1);
-                            if (n1.vKeys.size() > 1) {
-                                nToExpand++;
-                                vSizeAndPointerToNode.emplace_back(n1.vKeys.size(),
-                                                                   &lNodes.front());
-                                lNodes.front().lit = lNodes.begin();
-                            }
+                    }
+                    if (n2.vKeys.size() > 0) {
+                        lNodes.emplace_front(n2);
+                        if (n2.vKeys.size() > 1) {
+                            nToExpand++;
+                            vSizeAndPointerToNode.emplace_back(n2.vKeys.size(),
+                                                               &lNodes.front());
+                            lNodes.front().lit = lNodes.begin();
                         }
-                        if (n2.vKeys.size() > 0) {
-                            lNodes.emplace_front(n2);
-                            if (n2.vKeys.size() > 1) {
-                                nToExpand++;
-                                vSizeAndPointerToNode.emplace_back(n2.vKeys.size(),
-                                                                   &lNodes.front());
-                                lNodes.front().lit = lNodes.begin();
-                            }
+                    }
+                    if (n3.vKeys.size() > 0) {
+                        lNodes.emplace_front(n3);
+                        if (n3.vKeys.size() > 1) {
+                            nToExpand++;
+                            vSizeAndPointerToNode.emplace_back(n3.vKeys.size(),
+                                                               &lNodes.front());
+                            lNodes.front().lit = lNodes.begin();
                         }
-                        if (n3.vKeys.size() > 0) {
-                            lNodes.emplace_front(n3);
-                            if (n3.vKeys.size() > 1) {
-                                nToExpand++;
-                                vSizeAndPointerToNode.emplace_back(n3.vKeys.size(),
-                                                                   &lNodes.front());
-                                lNodes.front().lit = lNodes.begin();
-                            }
-                        }
-                        if (n4.vKeys.size() > 0) {
-                            lNodes.emplace_front(n4);
-                            if (n4.vKeys.size() > 1) {
-                                nToExpand++;
-                                vSizeAndPointerToNode.emplace_back(n4.vKeys.size(),
-                                                                   &lNodes.front());
-                                lNodes.front().lit = lNodes.begin();
-                            }
+                    }
+                    if (n4.vKeys.size() > 0) {
+                        lNodes.emplace_front(n4);
+                        if (n4.vKeys.size() > 1) {
+                            nToExpand++;
+                            vSizeAndPointerToNode.emplace_back(n4.vKeys.size(),
+                                                               &lNodes.front());
+                            lNodes.front().lit = lNodes.begin();
                         }
                     }
 
