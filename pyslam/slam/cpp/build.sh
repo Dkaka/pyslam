@@ -119,7 +119,11 @@ cmake .. \
 
 # Build the module
 echo "Building the module..."
-make -j$(nproc)
+# Parallel jobs, limited by the available memory (see get_build_jobs in bash_utils.sh).
+. "$PROJECT_ROOT/bash_utils.sh"
+NUM_JOBS=$(get_build_jobs)
+echo "Building with $NUM_JOBS parallel jobs (set PYSLAM_BUILD_JOBS to change)"
+make -j$NUM_JOBS
 
 # The module is already built to the correct location by CMake
 echo "Module built successfully!"

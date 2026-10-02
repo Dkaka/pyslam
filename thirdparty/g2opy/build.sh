@@ -174,11 +174,10 @@ echo "BUILD_TYPE: $BUILD_TYPE"
 make_dir build
 cd build
 cmake .. $EXTERNAL_OPTIONS $MAC_OPTIONS $LINUX_OPTIONS -DCMAKE_BUILD_TYPE=$BUILD_TYPE || { echo "Error: g2opy cmake configure failed"; exit 1; }
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    NUM_CORES=$(sysctl -n hw.ncpu)
-else
-    NUM_CORES=$(nproc)
-fi
+# Parallel jobs, limited by the available memory (see get_build_jobs in bash_utils.sh).
+. "$SCRIPT_DIR/../../bash_utils.sh"
+NUM_CORES=$(get_build_jobs)
+echo "Building with $NUM_CORES parallel jobs (set PYSLAM_BUILD_JOBS to change)"
 make -j $NUM_CORES || { echo "Error: g2opy build failed"; exit 1; }
 
 cd ..

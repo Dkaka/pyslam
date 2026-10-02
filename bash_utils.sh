@@ -504,6 +504,34 @@ stop_sudo_alive() {
     fi
 }
 
+# ===================== BUILD JOBS ========================
+
+# Number of parallel jobs for heavy C++ builds (GTSAM, g2o, the pySLAM C++ core): the number of
+# cores, capped so that each compiler process has about PYSLAM_MEM_PER_JOB_GB GB (default 4) of
+# available memory.
+# Without the cap, machines with many cores but little memory (e.g. WSL2, which gets half of the
+# host memory by default) run out of memory and the compiler is killed. Most GTSAM files need
+# under 4 GB; a few files of the GTSAM Python wrapper need up to about 10 GB on their own.
+# Set PYSLAM_BUILD_JOBS to choose the number of jobs yourself.
+function get_build_jobs(){
+    if [[ -n "$PYSLAM_BUILD_JOBS" ]]; then
+        echo "$PYSLAM_BUILD_JOBS"
+        return
+    fi
+    local cores mem_mb jobs
+    if [[ "$OSTYPE" == darwin* ]]; then
+        cores=$(sysctl -n hw.logicalcpu)
+        mem_mb=$(( $(sysctl -n hw.memsize) / 1048576 ))
+    else
+        cores=$(command nproc)
+        mem_mb=$(( $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) / 1024 ))
+    fi
+    jobs=$(( mem_mb / (${PYSLAM_MEM_PER_JOB_GB:-4} * 1024) ))
+    (( jobs > cores )) && jobs=$cores
+    (( jobs < 1 )) && jobs=1
+    echo "$jobs"
+}
+
 # ====================================================
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
