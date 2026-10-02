@@ -147,10 +147,10 @@ python main_semantic_image_segmentation.py
 - **Model code is not installed into the environment.** `scripts/install_extra.sh` clones each model
   at a fixed version into `thirdparty/`, applies pySLAM's patches and downloads the weights. It can be
   re-run at any time, and it skips what is already there.
-- **`--headless` runs as fast as it can**, several times faster than the camera, which leaves the
-  mapping thread less time per frame: on KITTI 06 it then sometimes loses track at the turns. With
-  the windows (no `--headless`) pySLAM keeps the camera's frame rate. Keep this in mind when you
-  compare results of headless runs.
+- **`main_slam.py` feeds frames at the camera's rate**, with or without `--headless`. `--speed 2`
+  plays twice as fast, and `--speed 0` as fast as possible. Faster than the camera, the mapping thread
+  gets less time per frame, and on KITTI 06 tracking is then sometimes lost at the turns. Use the
+  default speed when you compare results.
 - **A component is skipped, with the reason, when the machine cannot run it** (for example the 3R
   models without an NVIDIA GPU). A skipped component is not a failure.
 - **Gaussian splatting on another GPU.** Its CUDA extensions are built for the GPUs in the machine.
