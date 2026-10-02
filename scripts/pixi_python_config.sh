@@ -35,7 +35,7 @@ PIXI_ENV_DIR="${CONDA_PREFIX:-$ROOT_DIR/.pixi/envs/default}"
 # Check if we're in a pixi environment
 if [ -z "$PIXI_ACTIVATED" ]; then
     # Try to detect pixi environment
-    if [ -d "$PIXI_ENV_DIR" ] || [ -d "$PIXI_ENV_DIR" ]; then
+    if [ -d "$PIXI_ENV_DIR" ]; then
         export PIXI_ACTIVATED=true
     else
         # Not in pixi environment, exit silently
@@ -48,8 +48,6 @@ if [ "$PIXI_ACTIVATED" = true ]; then
     # Try to find pixi's Python directly
     PIXI_PYTHON=""
     if [ -f "$PIXI_ENV_DIR/bin/python" ]; then
-        PIXI_PYTHON="$PIXI_ENV_DIR/bin/python"
-    elif [ -f "$PIXI_ENV_DIR/bin/python" ]; then
         PIXI_PYTHON="$PIXI_ENV_DIR/bin/python"
     elif command -v pixi &> /dev/null; then
         # Use pixi run to get the correct Python

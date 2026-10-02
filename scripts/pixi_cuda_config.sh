@@ -34,7 +34,7 @@ PIXI_ENV_DIR="${CONDA_PREFIX:-$ROOT_DIR/.pixi/envs/default}"
 # Check if we're in a pixi environment
 if [ -z "$PIXI_ACTIVATED" ]; then
     # Try to detect pixi environment
-    if [ -d "$PIXI_ENV_DIR" ] || [ -d "$PIXI_ENV_DIR" ]; then
+    if [ -d "$PIXI_ENV_DIR" ]; then
         export PIXI_ACTIVATED=true
     else
         # Not in pixi environment, exit silently
@@ -54,16 +54,10 @@ if [ "$PIXI_ACTIVATED" = true ]; then
     if [ -d "$PIXI_ENV_DIR/nvvm/bin" ]; then
         PIXI_NVVM_BIN="$PIXI_ENV_DIR/nvvm/bin"
         PIXI_CUDA_ROOT="$PIXI_ENV_DIR"
-    elif [ -d "$PIXI_ENV_DIR/nvvm/bin" ]; then
-        PIXI_NVVM_BIN="$PIXI_ENV_DIR/nvvm/bin"
-        PIXI_CUDA_ROOT="$PIXI_ENV_DIR"
     fi
     
     # Find nvcc compiler
     if [ -f "$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc" ]; then
-        PIXI_NVCC="$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc"
-        PIXI_NVCC_BIN_DIR="$PIXI_ENV_DIR/targets/x86_64-linux/bin"
-    elif [ -f "$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc" ]; then
         PIXI_NVCC="$PIXI_ENV_DIR/targets/x86_64-linux/bin/nvcc"
         PIXI_NVCC_BIN_DIR="$PIXI_ENV_DIR/targets/x86_64-linux/bin"
     elif command -v nvcc &> /dev/null; then

@@ -68,10 +68,25 @@ function apply_patch() {
 }
 
 # clone_repo <thirdparty dir> <url> [<commit>]: clone into thirdparty/<dir> unless it is already there,
-# and check out <commit> when given (the version the patch was made for)
+# and check out <commit> when given (the version pySLAM's patch was made for). An existing clone at
+# another commit (e.g. from an older install) is moved to <commit> if it has no local changes.
 function clone_repo() {
-    local dir="$ROOT_DIR/thirdparty/$1" url="$2" commit="$3"
-    if [ -d "$dir/.git" ]; then
+    local dir="$ROOT_DIR/thirdparty/$1" url="$2" commit="$3" head
+    if [ -e "$dir/.git" ]; then
+        if [ -n "$commit" ]; then
+            head=$(git -C "$dir" rev-parse HEAD 2>/dev/null)
+            if [ "$head" != "$commit" ]; then
+                if [ -z "$(git -C "$dir" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+                    print_blue "thirdparty/$1 is at ${head:0:7}: checking out ${commit:0:7} ..."
+                    { git -C "$dir" checkout -q "$commit" 2>/dev/null \
+                        || { git -C "$dir" fetch -q origin && git -C "$dir" checkout -q "$commit"; }; } \
+                        || { print_red "ERROR: could not check out $commit in thirdparty/$1"; exit 1; }
+                else
+                    print_yellow "thirdparty/$1 is at ${head:0:7} with local changes; pySLAM's patch was made for ${commit:0:7}."
+                    print_yellow "  If the next step fails, remove thirdparty/$1 and re-run this script."
+                fi
+            fi
+        fi
         echo "thirdparty/$1 already cloned"
         return 0
     fi
@@ -228,6 +243,18 @@ function install_semantics() {
     fi
 }
 
+# cuda_home: the CUDA toolkit that torch's cpp_extension should use (it takes nvcc from $CUDA_HOME/bin):
+# CUDA_HOME if set, otherwise the prefix of the nvcc on the PATH (the environment under conda/pixi
+# with cuda-nvcc, /usr or /usr/local/cuda-X for a system toolkit). The path is not resolved: conda's
+# bin/nvcc may be a link into targets/.
+function cuda_home() {
+    if [ -n "$CUDA_HOME" ]; then
+        echo "$CUDA_HOME"
+    else
+        dirname "$(dirname "$(command -v nvcc)")"
+    fi
+}
+
 # has_cuda: true if torch can use an NVIDIA GPU
 function has_cuda() {
     "$PYTHON_EXE" -c "import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null
@@ -246,7 +273,7 @@ function build_curope() {
         return 0
     fi
     print_blue "Building curope in thirdparty/$1 ..."
-    ( cd "$dir" && CUDA_HOME="${CUDA_HOME:-$CONDA_PREFIX}" "$PYTHON_EXE" setup.py build_ext --inplace ) \
+    ( cd "$dir" && CUDA_HOME="$(cuda_home)" MAX_JOBS="$(get_build_jobs)" "$PYTHON_EXE" setup.py build_ext --inplace ) \
         || { print_red "ERROR: could not build curope in thirdparty/$1 (is the CUDA compiler nvcc available?)"; exit 1; }
 }
 
@@ -259,7 +286,7 @@ function build_cuda_extension_inplace() {
         return 0
     fi
     print_blue "Building $2 in thirdparty/$1 ..."
-    ( cd "$dir" && CUDA_HOME="${CUDA_HOME:-$CONDA_PREFIX}" "$PYTHON_EXE" setup.py build_ext --inplace ) \
+    ( cd "$dir" && CUDA_HOME="$(cuda_home)" MAX_JOBS="$(get_build_jobs)" "$PYTHON_EXE" setup.py build_ext --inplace ) \
         || { print_red "ERROR: could not build $2 (is the CUDA compiler nvcc available?)"; exit 1; }
 }
 
@@ -325,7 +352,7 @@ function install_scene3d() {
         print_blue "Building lietorch ..."
         ( cd thirdparty/lietorch && rm -rf build install \
             && cmake -S . -B build -G Ninja -DCMAKE_CUDA_COMPILER="$(command -v nvcc)" -DSITE_PACKAGES_DIR="$ROOT_DIR/thirdparty/lietorch/install" \
-            && cmake --build build -j "$(( $(getconf _NPROCESSORS_ONLN) / 2 + 1 ))" && cmake --install build ) \
+            && cmake --build build -j "$(get_build_jobs)" && cmake --install build ) \
             || { print_red "ERROR: could not build lietorch (are nvcc, cmake and ninja available?)"; exit 1; }
     else
         echo "lietorch already built"
