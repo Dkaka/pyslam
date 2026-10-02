@@ -10,8 +10,9 @@ pixi installs everything pySLAM needs into the repository folder (`.pixi/`), fro
 everybody gets the same versions. It does not touch conda or the rest of your system, and you do not
 need to install CUDA or a compiler.
 
-> **Do the installation before the lab.** It downloads about 9 GB (the environment and the model
-> weights) and compiles pySLAM's C++ modules, which takes from 15 minutes to over an hour.
+> **Do the installation before the lab.** It downloads about 9 GB with an NVIDIA GPU (the environment
+> and the model weights; about 4 GB without one) and compiles pySLAM's C++ modules, which takes from
+> 15 minutes to over an hour.
 
 ## Supported systems
 
@@ -22,7 +23,8 @@ need to install CUDA or a compiler.
 | **macOS** (Apple silicon, macOS 14 or later) | tested. Learned features use the Apple GPU |
 | **Windows** | via **WSL2** only (Ubuntu inside Windows), then as Linux: being tested |
 
-You need about **20 GB of free disk space**, an internet connection and, for the build, about
+You need about **30 GB of free disk space** (less without an NVIDIA GPU), an internet connection and,
+for the build, about
 **12 GB of free memory** (see [Good to know](#good-to-know)).
 
 ## 1. Install pixi
@@ -93,8 +95,8 @@ how to work in a pixi shell instead.
   build folders, and rebuilding takes up to an hour.
 - **Error messages tell you what to do.** If a component is not installed or not built, pySLAM says
   which one and which command installs or builds it.
-- **Not available**: SURF (non-free); the TensorFlow-based features (DELF, LF-Net, ContextDesc,
-  GeoDesc), which need their own environment.
+- **Not available**: SURF (non-free). The TensorFlow-based features (DELF, LF-Net, ContextDesc,
+  GeoDesc) are not in the default level.
 
 ## Troubleshooting
 
