@@ -153,7 +153,9 @@ class FeatureTrackerConfigs:
         sigma_level0=Parameters.kSigmaLevel0,
         match_ratio_test=kDefaultRatioTest,
         tracker_type=kTrackerType,
-        deterministic=False,
+        # the same keypoints for the same image in every run (ties in the octree broken by position);
+        # False: stock ORB-SLAM2, whose ties depend on memory addresses
+        deterministic=True,
     )
 
     BRISK = dict(

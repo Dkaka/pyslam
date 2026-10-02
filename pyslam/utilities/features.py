@@ -35,7 +35,9 @@ from .system import import_from, is_opencv_version_greater_equal
 from .geometry import add_ones, s1_diff_deg, s1_dist_deg
 from .descriptor_distances import l2_distances
 
-ORBextractor = import_from("orbslam2_features", "ORBextractor")
+# The deterministic extractor's octree: ties broken by position, so the same keypoints are kept in
+# every run (the stock one breaks them by memory address)
+ORBextractor = import_from("orbslam2_features", "ORBextractorDeterministic")
 
 kPySlamUtilsAvailable = True
 try:
