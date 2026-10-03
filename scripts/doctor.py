@@ -259,7 +259,7 @@ NATIVE_MODULES = [
     ("required", "C++ core", "import pyslam.slam.cpp; from pyslam.config_parameters import Parameters; "
                              "print(import_built_module('cpp_core') + f' (USE_CPP_CORE={Parameters.USE_CPP_CORE})')", "pixi run build-cpp-core"),
     ("optional", "3D viewer (pypangolin)", "print(import_built_module('pypangolin'))", "pixi run build-pangolin"),
-    ("required", "pyslam.slam", "import pyslam.slam.slam; print('imports')", ""),
+    ("required", "pyslam.slam", "import pyslam.slam.slam; print('imports')", "pixi run build"),
 ]
 
 
@@ -272,8 +272,12 @@ def check_native_modules(r):
     r.add(status, "pybind11 ABI", detail)
     for level, name, code, build in NATIVE_MODULES:
         ok, out = run_python(CHILD_PREFIX + "\n" + code)
-        if not ok and build and "the native module '" in out:  # our message; pySLAM's own say what to run
-            out += f": {build}"
+        if not ok and build:
+            if "C++ core is not built" in out and os.environ.get("PIXI_PROJECT_NAME"):
+                # the core's own message gives the pre-pixi commands, which stop outside pixi now
+                out = f"the C++ core is not built: {build}"
+            elif "the native module '" in out or "No module named" in out:
+                out += f": {build}"
         r.add("OK" if ok else ("FAIL" if level == "required" else "WARN"), name, out)
 
 
