@@ -71,7 +71,7 @@ class Parameters:
     # new keyframes and map points are then not arriving fast enough (see pyslam/slam/playback_throttle.py).
     # How often local mapping is busy does NOT separate the two cases: on KITTI 06 it was busy for
     # 52% of the keyframe requests in a run that tracked every frame, and for 59% in one that lost track.
-    kPlaybackThrottle = True  # can be disabled with main_slam.py --no-throttle
+    kPlaybackThrottle = False  # off by default: main_slam.py --throttle turns it on
     kPlaybackThrottleWeakTrackingRatio = 0.5  # weak: tracked points < this ratio x the reference keyframe's
     kPlaybackThrottleHighWeakFraction = 0.25  # above: reduce the playback speed
     kPlaybackThrottleLowWeakFraction = 0.10  # below: raise it again, up to the requested speed
